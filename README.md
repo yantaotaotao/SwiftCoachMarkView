@@ -198,5 +198,13 @@ UIKitSwfit/
 | 坐标系转换 | 使用 `UIView.convert(_:to:)` 进行精确坐标转换 |
 | 视图定位 | 使用 SwiftUI 的 `.position` modifier 进行绝对定位 |
 | 交互穿透 | 设置 `isUserInteractionEnabled = false` 允许事件传递 |
+
+## 备注执行命令
+
+```bash
+git diff eeb3d586066b327ccdc764a7c1f336b1e02050a5 b8db57336d952ed9b80257a893f57ae280af1c98 > ./all_file.diff
+# 只输出文件列表
+git diff --name-only eeb3d586066b327ccdc764a7c1f336b1e02050a5 b8db57336d952ed9b80257a893f57ae280af1c98 > ./all.diff
+```
 | 滚动更新 | 监听 `UIScrollViewDelegate` 动态更新位置 |
 | 布局时机 | 在 `viewDidLayoutSubviews` 中确保视图已完成布局 |
