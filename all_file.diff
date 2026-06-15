@@ -1,0 +1,2170 @@
+diff --git a/README.md b/README.md
+index 5ee558d..6bb10f1 100644
+--- a/README.md
++++ b/README.md
+@@ -1,2 +1,202 @@
+-# SwiftCoachMarkView
+-SwiftCoachMarkView
++# CoachMarkView
++
++一个基于 SwiftUI 的自定义提示组件，用于在指定目标视图下方显示带有箭头的提示气泡。
++
++## 功能特点
++
++- ✅ 根据目标视图位置自动定位提示气泡
++- ✅ 箭头自动指向目标视图中心
++- ✅ 气泡宽度固定为 200pt
++- ✅ 支持点击关闭按钮关闭提示
++- ✅ 支持界面滚动时自动更新位置
++- ✅ 不拦截用户交互，允许底层视图正常响应滚动等操作
++
++## 实现原理
++
++### 1. 坐标系统转换
++
++CoachMarkView 的核心是精确的坐标计算和转换：
++
++```swift
++// 在 ViewController 中计算目标位置
++private func calculateTargetPosition() -> CGPoint? {
++    collectionView.layoutIfNeeded()
++    
++    let indexPath = IndexPath(item: 0, section: 0)
++    guard let cellFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else {
++        return nil
++    }
++    
++    // 使用 UIKit 的 convert 方法将坐标从 collectionView 坐标系转换到 view 坐标系
++    let cellCenterInCollectionView = CGPoint(x: cellFrame.midX, y: cellFrame.maxY)
++    let targetPosition = collectionView.convert(cellCenterInCollectionView, to: view)
++    
++    return targetPosition
++}
++```
++
++**关键点**：
++- 使用 `layoutAttributesForItem` 获取 cell 在 collectionView 内部的 frame
++- 使用 `convert(_:to:)` 方法进行坐标系转换，自动处理所有父视图层级
++- `targetPosition` 表示目标视图底部中心点在主视图坐标系中的位置
++
++### 2. 气泡定位算法
++
++CoachMarkView 使用 `.position` modifier 进行精确定位：
++
++```swift
++.position(
++    x: bubbleCenterX,
++    y: targetPosition.y + (triangleHeight + bubbleContentHeight) / 2
++)
++```
++
++**定位逻辑**：
++- `bubbleCenterX`：气泡中心点的 x 坐标，限制在屏幕范围内
++- `y` 坐标：气泡中心点 = 目标位置 y + 气泡总高度的一半
++
++### 3. 箭头偏移计算
++
++箭头需要根据目标位置动态调整在气泡中的位置：
++
++```swift
++private var arrowCenterX: CGFloat {
++    // 计算箭头相对于气泡左边缘的位置
++    let arrowX = targetPosition.x - (bubbleCenterX - bubbleWidth / 2)
++    // 限制箭头在气泡范围内
++    let minArrowX: CGFloat = triangleWidth / 2
++    let maxArrowX: CGFloat = bubbleWidth - triangleWidth / 2
++    return max(minArrowX, min(arrowX, maxArrowX))
++}
++```
++
++### 4. 视图层级设计
++
++CoachMarkView 作为独立视图层叠在主视图之上：
++
++```swift
++// 将 CoachMarkView 添加到主视图上，覆盖全屏但内容只显示在目标位置附近
++NSLayoutConstraint.activate([
++    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
++    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
++    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
++    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
++])
++```
++
++**关键设置**：
++- `hostVC.view.isUserInteractionEnabled = false`：禁用交互，允许滚动事件穿透到底层 tableView
++
++## 使用方法
++
++### 1. 创建 CoachMarkView
++
++```swift
++let coachMark = CoachMarkView(
++    title: "标题",
++    content: "提示内容",
++    targetPosition: targetPosition,  // 目标位置（主视图坐标系）
++    containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
++    onDismiss: { [weak self] in
++        self?.hideCoachMark()
++    }
++)
++```
++
++### 2. 通过 UIHostingController 添加到视图
++
++```swift
++coachMarkHostingController = UIHostingController(rootView: coachMark)
++guard let hostVC = coachMarkHostingController else { return }
++
++hostVC.view.translatesAutoresizingMaskIntoConstraints = false
++hostVC.view.backgroundColor = .clear
++hostVC.view.isUserInteractionEnabled = false  // 关键：允许交互穿透
++
++addChild(hostVC)
++view.addSubview(hostVC.view)
++
++NSLayoutConstraint.activate([
++    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
++    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
++    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
++    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
++])
++
++hostVC.didMove(toParent: self)
++```
++
++### 3. 监听滚动更新位置
++
++```swift
++func scrollViewDidScroll(_ scrollView: UIScrollView) {
++    updateCoachMarkPosition()
++}
++
++private func updateCoachMarkPosition() {
++    guard let hostVC = coachMarkHostingController else { return }
++    guard let targetPosition = calculateTargetPosition() else { return }
++    
++    let updatedCoachMark = CoachMarkView(
++        title: "标题",
++        content: "提示内容",
++        targetPosition: targetPosition,
++        containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
++        onDismiss: { [weak self] in
++            self?.hideCoachMark()
++        }
++    )
++    
++    hostVC.rootView = updatedCoachMark
++}
++```
++
++### 4. 隐藏 CoachMarkView
++
++```swift
++private func hideCoachMark() {
++    coachMarkHostingController?.view.removeFromSuperview()
++    coachMarkHostingController?.removeFromParent()
++    coachMarkHostingController = nil
++}
++```
++
++## 注意事项
++
++1. **布局时机**：建议在 `viewDidLayoutSubviews` 中延迟执行 `showCoachMark()`，确保 collectionView 已完成布局
++
++```swift
++override func viewDidLayoutSubviews() {
++    super.viewDidLayoutSubviews()
++    
++    if !coachMarkAdded && headerContainer.bounds.width > 0 && collectionView.bounds.width > 0 {
++        coachMarkAdded = true
++        DispatchQueue.main.async {
++            self.showCoachMark()
++        }
++    }
++}
++```
++
++2. **坐标转换**：确保使用 `convert(_:to:)` 方法进行坐标系转换，避免手动计算错误
++
++3. **交互穿透**：设置 `hostVC.view.isUserInteractionEnabled = false` 允许底层视图响应触摸事件
++
++## 文件结构
++
++```
++UIKitSwfit/
++├── ViewController.swift    # 主视图控制器，集成 CoachMarkView
++├── CoachMarkView.swift     # CoachMarkView 自定义组件
++└── README.md               # 文档说明
++```
++
++## 技术要点总结
++
++| 技术点 | 说明 |
++|--------|------|
++| 坐标系转换 | 使用 `UIView.convert(_:to:)` 进行精确坐标转换 |
++| 视图定位 | 使用 SwiftUI 的 `.position` modifier 进行绝对定位 |
++| 交互穿透 | 设置 `isUserInteractionEnabled = false` 允许事件传递 |
++| 滚动更新 | 监听 `UIScrollViewDelegate` 动态更新位置 |
++| 布局时机 | 在 `viewDidLayoutSubviews` 中确保视图已完成布局 |
+diff --git a/UIKitSwfit b/UIKitSwfit
+new file mode 160000
+index 0000000..fc50748
+--- /dev/null
++++ b/UIKitSwfit
+@@ -0,0 +1 @@
++Subproject commit fc50748eba1b4cdf9d7028b69b909a982e5154b4
+diff --git a/UIKitSwfit.xcodeproj/project.pbxproj b/UIKitSwfit.xcodeproj/project.pbxproj
+new file mode 100644
+index 0000000..3c899c8
+--- /dev/null
++++ b/UIKitSwfit.xcodeproj/project.pbxproj
+@@ -0,0 +1,596 @@
++// !$*UTF8*$!
++{
++	archiveVersion = 1;
++	classes = {
++	};
++	objectVersion = 77;
++	objects = {
++
++/* Begin PBXContainerItemProxy section */
++		B9CABFE72FCFDC6000924156 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = B9CABFC82FCFDC5E00924156 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = B9CABFCF2FCFDC5E00924156;
++			remoteInfo = UIKitSwfit;
++		};
++		B9CABFF12FCFDC6000924156 /* PBXContainerItemProxy */ = {
++			isa = PBXContainerItemProxy;
++			containerPortal = B9CABFC82FCFDC5E00924156 /* Project object */;
++			proxyType = 1;
++			remoteGlobalIDString = B9CABFCF2FCFDC5E00924156;
++			remoteInfo = UIKitSwfit;
++		};
++/* End PBXContainerItemProxy section */
++
++/* Begin PBXFileReference section */
++		B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UIKitSwfit.app; sourceTree = BUILT_PRODUCTS_DIR; };
++		B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UIKitSwfitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
++		B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UIKitSwfitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
++/* End PBXFileReference section */
++
++/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
++		B9CABFF82FCFDC6000924156 /* Exceptions for "UIKitSwfit" folder in "UIKitSwfit" target */ = {
++			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
++			membershipExceptions = (
++				Info.plist,
++			);
++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
++		};
++/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
++
++/* Begin PBXFileSystemSynchronizedRootGroup section */
++		B9CABFD22FCFDC5E00924156 /* UIKitSwfit */ = {
++			isa = PBXFileSystemSynchronizedRootGroup;
++			exceptions = (
++				B9CABFF82FCFDC6000924156 /* Exceptions for "UIKitSwfit" folder in "UIKitSwfit" target */,
++			);
++			path = UIKitSwfit;
++			sourceTree = "<group>";
++		};
++		B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */ = {
++			isa = PBXFileSystemSynchronizedRootGroup;
++			path = UIKitSwfitTests;
++			sourceTree = "<group>";
++		};
++		B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */ = {
++			isa = PBXFileSystemSynchronizedRootGroup;
++			path = UIKitSwfitUITests;
++			sourceTree = "<group>";
++		};
++/* End PBXFileSystemSynchronizedRootGroup section */
++
++/* Begin PBXFrameworksBuildPhase section */
++		B9CABFCD2FCFDC5E00924156 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFE32FCFDC6000924156 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFED2FCFDC6000924156 /* Frameworks */ = {
++			isa = PBXFrameworksBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXFrameworksBuildPhase section */
++
++/* Begin PBXGroup section */
++		B9CABFC72FCFDC5E00924156 = {
++			isa = PBXGroup;
++			children = (
++				B9CABFD22FCFDC5E00924156 /* UIKitSwfit */,
++				B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */,
++				B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */,
++				B9CABFD12FCFDC5E00924156 /* Products */,
++			);
++			sourceTree = "<group>";
++		};
++		B9CABFD12FCFDC5E00924156 /* Products */ = {
++			isa = PBXGroup;
++			children = (
++				B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */,
++				B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */,
++				B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */,
++			);
++			name = Products;
++			sourceTree = "<group>";
++		};
++/* End PBXGroup section */
++
++/* Begin PBXNativeTarget section */
++		B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = B9CABFF92FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfit" */;
++			buildPhases = (
++				B9CABFCC2FCFDC5E00924156 /* Sources */,
++				B9CABFCD2FCFDC5E00924156 /* Frameworks */,
++				B9CABFCE2FCFDC5E00924156 /* Resources */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++			);
++			fileSystemSynchronizedGroups = (
++				B9CABFD22FCFDC5E00924156 /* UIKitSwfit */,
++			);
++			name = UIKitSwfit;
++			packageProductDependencies = (
++			);
++			productName = UIKitSwfit;
++			productReference = B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */;
++			productType = "com.apple.product-type.application";
++		};
++		B9CABFE52FCFDC6000924156 /* UIKitSwfitTests */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = B9CABFFE2FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitTests" */;
++			buildPhases = (
++				B9CABFE22FCFDC6000924156 /* Sources */,
++				B9CABFE32FCFDC6000924156 /* Frameworks */,
++				B9CABFE42FCFDC6000924156 /* Resources */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				B9CABFE82FCFDC6000924156 /* PBXTargetDependency */,
++			);
++			fileSystemSynchronizedGroups = (
++				B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */,
++			);
++			name = UIKitSwfitTests;
++			packageProductDependencies = (
++			);
++			productName = UIKitSwfitTests;
++			productReference = B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */;
++			productType = "com.apple.product-type.bundle.unit-test";
++		};
++		B9CABFEF2FCFDC6000924156 /* UIKitSwfitUITests */ = {
++			isa = PBXNativeTarget;
++			buildConfigurationList = B9CAC0012FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitUITests" */;
++			buildPhases = (
++				B9CABFEC2FCFDC6000924156 /* Sources */,
++				B9CABFED2FCFDC6000924156 /* Frameworks */,
++				B9CABFEE2FCFDC6000924156 /* Resources */,
++			);
++			buildRules = (
++			);
++			dependencies = (
++				B9CABFF22FCFDC6000924156 /* PBXTargetDependency */,
++			);
++			fileSystemSynchronizedGroups = (
++				B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */,
++			);
++			name = UIKitSwfitUITests;
++			packageProductDependencies = (
++			);
++			productName = UIKitSwfitUITests;
++			productReference = B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */;
++			productType = "com.apple.product-type.bundle.ui-testing";
++		};
++/* End PBXNativeTarget section */
++
++/* Begin PBXProject section */
++		B9CABFC82FCFDC5E00924156 /* Project object */ = {
++			isa = PBXProject;
++			attributes = {
++				BuildIndependentTargetsInParallel = 1;
++				LastSwiftUpdateCheck = 2650;
++				LastUpgradeCheck = 2650;
++				TargetAttributes = {
++					B9CABFCF2FCFDC5E00924156 = {
++						CreatedOnToolsVersion = 26.5;
++					};
++					B9CABFE52FCFDC6000924156 = {
++						CreatedOnToolsVersion = 26.5;
++						TestTargetID = B9CABFCF2FCFDC5E00924156;
++					};
++					B9CABFEF2FCFDC6000924156 = {
++						CreatedOnToolsVersion = 26.5;
++						TestTargetID = B9CABFCF2FCFDC5E00924156;
++					};
++				};
++			};
++			buildConfigurationList = B9CABFCB2FCFDC5E00924156 /* Build configuration list for PBXProject "UIKitSwfit" */;
++			developmentRegion = en;
++			hasScannedForEncodings = 0;
++			knownRegions = (
++				en,
++				Base,
++			);
++			mainGroup = B9CABFC72FCFDC5E00924156;
++			minimizedProjectReferenceProxies = 1;
++			preferredProjectObjectVersion = 77;
++			productRefGroup = B9CABFD12FCFDC5E00924156 /* Products */;
++			projectDirPath = "";
++			projectRoot = "";
++			targets = (
++				B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */,
++				B9CABFE52FCFDC6000924156 /* UIKitSwfitTests */,
++				B9CABFEF2FCFDC6000924156 /* UIKitSwfitUITests */,
++			);
++		};
++/* End PBXProject section */
++
++/* Begin PBXResourcesBuildPhase section */
++		B9CABFCE2FCFDC5E00924156 /* Resources */ = {
++			isa = PBXResourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFE42FCFDC6000924156 /* Resources */ = {
++			isa = PBXResourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFEE2FCFDC6000924156 /* Resources */ = {
++			isa = PBXResourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXResourcesBuildPhase section */
++
++/* Begin PBXSourcesBuildPhase section */
++		B9CABFCC2FCFDC5E00924156 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFE22FCFDC6000924156 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++		B9CABFEC2FCFDC6000924156 /* Sources */ = {
++			isa = PBXSourcesBuildPhase;
++			buildActionMask = 2147483647;
++			files = (
++			);
++			runOnlyForDeploymentPostprocessing = 0;
++		};
++/* End PBXSourcesBuildPhase section */
++
++/* Begin PBXTargetDependency section */
++		B9CABFE82FCFDC6000924156 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
++			targetProxy = B9CABFE72FCFDC6000924156 /* PBXContainerItemProxy */;
++		};
++		B9CABFF22FCFDC6000924156 /* PBXTargetDependency */ = {
++			isa = PBXTargetDependency;
++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
++			targetProxy = B9CABFF12FCFDC6000924156 /* PBXContainerItemProxy */;
++		};
++/* End PBXTargetDependency section */
++
++/* Begin XCBuildConfiguration section */
++		B9CABFFA2FCFDC6000924156 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
++				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				INFOPLIST_FILE = UIKitSwfit/Info.plist;
++				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
++				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
++				INFOPLIST_KEY_UIMainStoryboardFile = Main;
++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
++				LD_RUNPATH_SEARCH_PATHS = (
++					"$(inherited)",
++					"@executable_path/Frameworks",
++				);
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfit;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = YES;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
++				SWIFT_EMIT_LOC_STRINGS = YES;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++			};
++			name = Debug;
++		};
++		B9CABFFB2FCFDC6000924156 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
++				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				INFOPLIST_FILE = UIKitSwfit/Info.plist;
++				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
++				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
++				INFOPLIST_KEY_UIMainStoryboardFile = Main;
++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
++				LD_RUNPATH_SEARCH_PATHS = (
++					"$(inherited)",
++					"@executable_path/Frameworks",
++				);
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfit;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = YES;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
++				SWIFT_EMIT_LOC_STRINGS = YES;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++			};
++			name = Release;
++		};
++		B9CABFFC2FCFDC6000924156 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ALWAYS_SEARCH_USER_PATHS = NO;
++				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
++				CLANG_ANALYZER_NONNULL = YES;
++				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
++				CLANG_ENABLE_MODULES = YES;
++				CLANG_ENABLE_OBJC_ARC = YES;
++				CLANG_ENABLE_OBJC_WEAK = YES;
++				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
++				CLANG_WARN_BOOL_CONVERSION = YES;
++				CLANG_WARN_COMMA = YES;
++				CLANG_WARN_CONSTANT_CONVERSION = YES;
++				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
++				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
++				CLANG_WARN_EMPTY_BODY = YES;
++				CLANG_WARN_ENUM_CONVERSION = YES;
++				CLANG_WARN_INFINITE_RECURSION = YES;
++				CLANG_WARN_INT_CONVERSION = YES;
++				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
++				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
++				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
++				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
++				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
++				CLANG_WARN_STRICT_PROTOTYPES = YES;
++				CLANG_WARN_SUSPICIOUS_MOVE = YES;
++				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
++				CLANG_WARN_UNREACHABLE_CODE = YES;
++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
++				COPY_PHASE_STRIP = NO;
++				DEBUG_INFORMATION_FORMAT = dwarf;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				ENABLE_STRICT_OBJC_MSGSEND = YES;
++				ENABLE_TESTABILITY = YES;
++				ENABLE_USER_SCRIPT_SANDBOXING = YES;
++				GCC_C_LANGUAGE_STANDARD = gnu17;
++				GCC_DYNAMIC_NO_PIC = NO;
++				GCC_NO_COMMON_BLOCKS = YES;
++				GCC_OPTIMIZATION_LEVEL = 0;
++				GCC_PREPROCESSOR_DEFINITIONS = (
++					"DEBUG=1",
++					"$(inherited)",
++				);
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
++				GCC_WARN_UNDECLARED_SELECTOR = YES;
++				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
++				GCC_WARN_UNUSED_FUNCTION = YES;
++				GCC_WARN_UNUSED_VARIABLE = YES;
++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
++				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
++				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
++				MTL_FAST_MATH = YES;
++				ONLY_ACTIVE_ARCH = YES;
++				SDKROOT = iphoneos;
++				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
++				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
++			};
++			name = Debug;
++		};
++		B9CABFFD2FCFDC6000924156 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				ALWAYS_SEARCH_USER_PATHS = NO;
++				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
++				CLANG_ANALYZER_NONNULL = YES;
++				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
++				CLANG_ENABLE_MODULES = YES;
++				CLANG_ENABLE_OBJC_ARC = YES;
++				CLANG_ENABLE_OBJC_WEAK = YES;
++				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
++				CLANG_WARN_BOOL_CONVERSION = YES;
++				CLANG_WARN_COMMA = YES;
++				CLANG_WARN_CONSTANT_CONVERSION = YES;
++				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
++				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
++				CLANG_WARN_EMPTY_BODY = YES;
++				CLANG_WARN_ENUM_CONVERSION = YES;
++				CLANG_WARN_INFINITE_RECURSION = YES;
++				CLANG_WARN_INT_CONVERSION = YES;
++				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
++				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
++				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
++				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
++				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
++				CLANG_WARN_STRICT_PROTOTYPES = YES;
++				CLANG_WARN_SUSPICIOUS_MOVE = YES;
++				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
++				CLANG_WARN_UNREACHABLE_CODE = YES;
++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
++				COPY_PHASE_STRIP = NO;
++				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				ENABLE_NS_ASSERTIONS = NO;
++				ENABLE_STRICT_OBJC_MSGSEND = YES;
++				ENABLE_USER_SCRIPT_SANDBOXING = YES;
++				GCC_C_LANGUAGE_STANDARD = gnu17;
++				GCC_NO_COMMON_BLOCKS = YES;
++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
++				GCC_WARN_UNDECLARED_SELECTOR = YES;
++				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
++				GCC_WARN_UNUSED_FUNCTION = YES;
++				GCC_WARN_UNUSED_VARIABLE = YES;
++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
++				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
++				MTL_ENABLE_DEBUG_INFO = NO;
++				MTL_FAST_MATH = YES;
++				SDKROOT = iphoneos;
++				SWIFT_COMPILATION_MODE = wholemodule;
++				VALIDATE_PRODUCT = YES;
++			};
++			name = Release;
++		};
++		B9CABFFF2FCFDC6000924156 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				BUNDLE_LOADER = "$(TEST_HOST)";
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitTests;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_EMIT_LOC_STRINGS = NO;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/UIKitSwfit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/UIKitSwfit";
++			};
++			name = Debug;
++		};
++		B9CAC0002FCFDC6000924156 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				BUNDLE_LOADER = "$(TEST_HOST)";
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitTests;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_EMIT_LOC_STRINGS = NO;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/UIKitSwfit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/UIKitSwfit";
++			};
++			name = Release;
++		};
++		B9CAC0022FCFDC6000924156 /* Debug */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitUITests;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_EMIT_LOC_STRINGS = NO;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++				TEST_TARGET_NAME = UIKitSwfit;
++			};
++			name = Debug;
++		};
++		B9CAC0032FCFDC6000924156 /* Release */ = {
++			isa = XCBuildConfiguration;
++			buildSettings = {
++				CODE_SIGN_STYLE = Automatic;
++				CURRENT_PROJECT_VERSION = 1;
++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
++				GENERATE_INFOPLIST_FILE = YES;
++				MARKETING_VERSION = 1.0;
++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitUITests;
++				PRODUCT_NAME = "$(TARGET_NAME)";
++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
++				SWIFT_EMIT_LOC_STRINGS = NO;
++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
++				SWIFT_VERSION = 5.0;
++				TARGETED_DEVICE_FAMILY = "1,2";
++				TEST_TARGET_NAME = UIKitSwfit;
++			};
++			name = Release;
++		};
++/* End XCBuildConfiguration section */
++
++/* Begin XCConfigurationList section */
++		B9CABFCB2FCFDC5E00924156 /* Build configuration list for PBXProject "UIKitSwfit" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				B9CABFFC2FCFDC6000924156 /* Debug */,
++				B9CABFFD2FCFDC6000924156 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		B9CABFF92FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfit" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				B9CABFFA2FCFDC6000924156 /* Debug */,
++				B9CABFFB2FCFDC6000924156 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		B9CABFFE2FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitTests" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				B9CABFFF2FCFDC6000924156 /* Debug */,
++				B9CAC0002FCFDC6000924156 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++		B9CAC0012FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitUITests" */ = {
++			isa = XCConfigurationList;
++			buildConfigurations = (
++				B9CAC0022FCFDC6000924156 /* Debug */,
++				B9CAC0032FCFDC6000924156 /* Release */,
++			);
++			defaultConfigurationIsVisible = 0;
++			defaultConfigurationName = Release;
++		};
++/* End XCConfigurationList section */
++	};
++	rootObject = B9CABFC82FCFDC5E00924156 /* Project object */;
++}
+diff --git a/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata b/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+new file mode 100644
+index 0000000..919434a
+--- /dev/null
++++ b/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<Workspace
++   version = "1.0">
++   <FileRef
++      location = "self:">
++   </FileRef>
++</Workspace>
+diff --git a/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate b/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate
+new file mode 100644
+index 0000000..1a0835e
+Binary files /dev/null and b/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate differ
+diff --git a/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
+new file mode 100644
+index 0000000..1e00f48
+--- /dev/null
++++ b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
+@@ -0,0 +1,84 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<Bucket
++   uuid = "827F966D-FA97-49D4-8A21-61E82EC96041"
++   type = "1"
++   version = "2.0">
++   <Breakpoints>
++      <BreakpointProxy
++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
++         <BreakpointContent
++            uuid = "CF25F2E2-EC45-4276-858C-6FFF32A5721C"
++            shouldBeEnabled = "Yes"
++            ignoreCount = "0"
++            continueAfterRunningActions = "No"
++            filePath = "UIKitSwfit/ViewController.swift"
++            startingColumnNumber = "9223372036854775807"
++            endingColumnNumber = "9223372036854775807"
++            startingLineNumber = "239"
++            endingLineNumber = "239">
++         </BreakpointContent>
++      </BreakpointProxy>
++      <BreakpointProxy
++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
++         <BreakpointContent
++            uuid = "4555BE80-EF75-4ACB-B8E3-5B47F71585EA"
++            shouldBeEnabled = "Yes"
++            ignoreCount = "0"
++            continueAfterRunningActions = "No"
++            filePath = "UIKitSwfit/ViewController.swift"
++            startingColumnNumber = "9223372036854775807"
++            endingColumnNumber = "9223372036854775807"
++            startingLineNumber = "245"
++            endingLineNumber = "245">
++         </BreakpointContent>
++      </BreakpointProxy>
++      <BreakpointProxy
++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
++         <BreakpointContent
++            uuid = "C0A3E63F-EB91-489D-84C2-144D9A033BDF"
++            shouldBeEnabled = "Yes"
++            ignoreCount = "0"
++            continueAfterRunningActions = "No"
++            filePath = "UIKitSwfit/ViewController.swift"
++            startingColumnNumber = "9223372036854775807"
++            endingColumnNumber = "9223372036854775807"
++            startingLineNumber = "86"
++            endingLineNumber = "86"
++            landmarkName = "calculateTargetPosition()"
++            landmarkType = "7">
++         </BreakpointContent>
++      </BreakpointProxy>
++      <BreakpointProxy
++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
++         <BreakpointContent
++            uuid = "EDB69113-6760-4211-A14E-F9A193A5CEE9"
++            shouldBeEnabled = "Yes"
++            ignoreCount = "0"
++            continueAfterRunningActions = "No"
++            filePath = "UIKitSwfit/ViewController.swift"
++            startingColumnNumber = "9223372036854775807"
++            endingColumnNumber = "9223372036854775807"
++            startingLineNumber = "191"
++            endingLineNumber = "191"
++            landmarkName = "ViewController"
++            landmarkType = "21">
++         </BreakpointContent>
++      </BreakpointProxy>
++      <BreakpointProxy
++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
++         <BreakpointContent
++            uuid = "D48068D9-B12A-44C8-83A3-2F5BE158E781"
++            shouldBeEnabled = "Yes"
++            ignoreCount = "0"
++            continueAfterRunningActions = "No"
++            filePath = "UIKitSwfit/ViewController.swift"
++            startingColumnNumber = "9223372036854775807"
++            endingColumnNumber = "9223372036854775807"
++            startingLineNumber = "170"
++            endingLineNumber = "170"
++            landmarkName = "updateCoachMarkPosition()"
++            landmarkType = "7">
++         </BreakpointContent>
++      </BreakpointProxy>
++   </Breakpoints>
++</Bucket>
+diff --git a/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist
+new file mode 100644
+index 0000000..6bfd6fb
+--- /dev/null
++++ b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist
+@@ -0,0 +1,14 @@
++<?xml version="1.0" encoding="UTF-8"?>
++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
++<plist version="1.0">
++<dict>
++	<key>SchemeUserState</key>
++	<dict>
++		<key>UIKitSwfit.xcscheme_^#shared#^_</key>
++		<dict>
++			<key>orderHint</key>
++			<integer>0</integer>
++		</dict>
++	</dict>
++</dict>
++</plist>
+diff --git a/UIKitSwfitTests/UIKitSwfitTests.swift b/UIKitSwfitTests/UIKitSwfitTests.swift
+new file mode 100644
+index 0000000..e8a5067
+--- /dev/null
++++ b/UIKitSwfitTests/UIKitSwfitTests.swift
+@@ -0,0 +1,38 @@
++//
++//  UIKitSwfitTests.swift
++//  UIKitSwfitTests
++//
++//  Created by yantao on 2026/6/3.
++//
++
++import XCTest
++@testable import UIKitSwfit
++
++final class UIKitSwfitTests: XCTestCase {
++
++    override func setUpWithError() throws {
++        // Put setup code here. This method is called before the invocation of each test method in the class.
++    }
++
++    override func tearDownWithError() throws {
++        // Put teardown code here. This method is called after the invocation of each test method in the class.
++    }
++
++    func testExample() throws {
++        // This is an example of a functional test case.
++        // Use XCTAssert and related functions to verify your tests produce the correct results.
++        // Any test you write for XCTest can be annotated as throws and async.
++        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
++        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
++        // XCTest Documentation
++        // https://developer.apple.com/documentation/xctest
++    }
++
++    func testPerformanceExample() throws {
++        // This is an example of a performance test case.
++        self.measure {
++            // Put the code you want to measure the time of here.
++        }
++    }
++
++}
+diff --git a/UIKitSwfitUITests/UIKitSwfitUITests.swift b/UIKitSwfitUITests/UIKitSwfitUITests.swift
+new file mode 100644
+index 0000000..497a830
+--- /dev/null
++++ b/UIKitSwfitUITests/UIKitSwfitUITests.swift
+@@ -0,0 +1,43 @@
++//
++//  UIKitSwfitUITests.swift
++//  UIKitSwfitUITests
++//
++//  Created by yantao on 2026/6/3.
++//
++
++import XCTest
++
++final class UIKitSwfitUITests: XCTestCase {
++
++    override func setUpWithError() throws {
++        // Put setup code here. This method is called before the invocation of each test method in the class.
++
++        // In UI tests it is usually best to stop immediately when a failure occurs.
++        continueAfterFailure = false
++
++        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
++    }
++
++    override func tearDownWithError() throws {
++        // Put teardown code here. This method is called after the invocation of each test method in the class.
++    }
++
++    @MainActor
++    func testExample() throws {
++        // UI tests must launch the application that they test.
++        let app = XCUIApplication()
++        app.launch()
++
++        // Use XCTAssert and related functions to verify your tests produce the correct results.
++        // XCUIAutomation Documentation
++        // https://developer.apple.com/documentation/xcuiautomation
++    }
++
++    @MainActor
++    func testLaunchPerformance() throws {
++        // This measures how long it takes to launch your application.
++        measure(metrics: [XCTApplicationLaunchMetric()]) {
++            XCUIApplication().launch()
++        }
++    }
++}
+diff --git a/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift b/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift
+new file mode 100644
+index 0000000..5bd9ba3
+--- /dev/null
++++ b/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift
+@@ -0,0 +1,35 @@
++//
++//  UIKitSwfitUITestsLaunchTests.swift
++//  UIKitSwfitUITests
++//
++//  Created by yantao on 2026/6/3.
++//
++
++import XCTest
++
++final class UIKitSwfitUITestsLaunchTests: XCTestCase {
++
++    override class var runsForEachTargetApplicationUIConfiguration: Bool {
++        true
++    }
++
++    override func setUpWithError() throws {
++        continueAfterFailure = false
++    }
++
++    @MainActor
++    func testLaunch() throws {
++        let app = XCUIApplication()
++        app.launch()
++
++        // Insert steps here to perform after app launch but before taking a screenshot,
++        // such as logging into a test account or navigating somewhere in the app
++        // XCUIAutomation Documentation
++        // https://developer.apple.com/documentation/xcuiautomation
++
++        let attachment = XCTAttachment(screenshot: app.screenshot())
++        attachment.name = "Launch Screen"
++        attachment.lifetime = .keepAlways
++        add(attachment)
++    }
++}
+diff --git a/a1_all_change.diff b/a1_all_change.diff
+new file mode 100644
+index 0000000..f6976cc
+--- /dev/null
++++ b/a1_all_change.diff
+@@ -0,0 +1,1085 @@
++commit 2d8293cf7ef31cabb18436fb256de2d824b669d8
++Author: yantao <yantaoit@163.com>
++Date:   Wed Jun 3 18:48:49 2026 +0800
++
++    view
++
++diff --git a/README.md b/README.md
++index 5ee558d..6bb10f1 100644
++--- a/README.md
+++++ b/README.md
++@@ -1,2 +1,202 @@
++-# SwiftCoachMarkView
++-SwiftCoachMarkView
+++# CoachMarkView
+++
+++一个基于 SwiftUI 的自定义提示组件，用于在指定目标视图下方显示带有箭头的提示气泡。
+++
+++## 功能特点
+++
+++- ✅ 根据目标视图位置自动定位提示气泡
+++- ✅ 箭头自动指向目标视图中心
+++- ✅ 气泡宽度固定为 200pt
+++- ✅ 支持点击关闭按钮关闭提示
+++- ✅ 支持界面滚动时自动更新位置
+++- ✅ 不拦截用户交互，允许底层视图正常响应滚动等操作
+++
+++## 实现原理
+++
+++### 1. 坐标系统转换
+++
+++CoachMarkView 的核心是精确的坐标计算和转换：
+++
+++```swift
+++// 在 ViewController 中计算目标位置
+++private func calculateTargetPosition() -> CGPoint? {
+++    collectionView.layoutIfNeeded()
+++    
+++    let indexPath = IndexPath(item: 0, section: 0)
+++    guard let cellFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else {
+++        return nil
+++    }
+++    
+++    // 使用 UIKit 的 convert 方法将坐标从 collectionView 坐标系转换到 view 坐标系
+++    let cellCenterInCollectionView = CGPoint(x: cellFrame.midX, y: cellFrame.maxY)
+++    let targetPosition = collectionView.convert(cellCenterInCollectionView, to: view)
+++    
+++    return targetPosition
+++}
+++```
+++
+++**关键点**：
+++- 使用 `layoutAttributesForItem` 获取 cell 在 collectionView 内部的 frame
+++- 使用 `convert(_:to:)` 方法进行坐标系转换，自动处理所有父视图层级
+++- `targetPosition` 表示目标视图底部中心点在主视图坐标系中的位置
+++
+++### 2. 气泡定位算法
+++
+++CoachMarkView 使用 `.position` modifier 进行精确定位：
+++
+++```swift
+++.position(
+++    x: bubbleCenterX,
+++    y: targetPosition.y + (triangleHeight + bubbleContentHeight) / 2
+++)
+++```
+++
+++**定位逻辑**：
+++- `bubbleCenterX`：气泡中心点的 x 坐标，限制在屏幕范围内
+++- `y` 坐标：气泡中心点 = 目标位置 y + 气泡总高度的一半
+++
+++### 3. 箭头偏移计算
+++
+++箭头需要根据目标位置动态调整在气泡中的位置：
+++
+++```swift
+++private var arrowCenterX: CGFloat {
+++    // 计算箭头相对于气泡左边缘的位置
+++    let arrowX = targetPosition.x - (bubbleCenterX - bubbleWidth / 2)
+++    // 限制箭头在气泡范围内
+++    let minArrowX: CGFloat = triangleWidth / 2
+++    let maxArrowX: CGFloat = bubbleWidth - triangleWidth / 2
+++    return max(minArrowX, min(arrowX, maxArrowX))
+++}
+++```
+++
+++### 4. 视图层级设计
+++
+++CoachMarkView 作为独立视图层叠在主视图之上：
+++
+++```swift
+++// 将 CoachMarkView 添加到主视图上，覆盖全屏但内容只显示在目标位置附近
+++NSLayoutConstraint.activate([
+++    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
+++    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+++    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+++    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+++])
+++```
+++
+++**关键设置**：
+++- `hostVC.view.isUserInteractionEnabled = false`：禁用交互，允许滚动事件穿透到底层 tableView
+++
+++## 使用方法
+++
+++### 1. 创建 CoachMarkView
+++
+++```swift
+++let coachMark = CoachMarkView(
+++    title: "标题",
+++    content: "提示内容",
+++    targetPosition: targetPosition,  // 目标位置（主视图坐标系）
+++    containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
+++    onDismiss: { [weak self] in
+++        self?.hideCoachMark()
+++    }
+++)
+++```
+++
+++### 2. 通过 UIHostingController 添加到视图
+++
+++```swift
+++coachMarkHostingController = UIHostingController(rootView: coachMark)
+++guard let hostVC = coachMarkHostingController else { return }
+++
+++hostVC.view.translatesAutoresizingMaskIntoConstraints = false
+++hostVC.view.backgroundColor = .clear
+++hostVC.view.isUserInteractionEnabled = false  // 关键：允许交互穿透
+++
+++addChild(hostVC)
+++view.addSubview(hostVC.view)
+++
+++NSLayoutConstraint.activate([
+++    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
+++    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+++    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+++    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+++])
+++
+++hostVC.didMove(toParent: self)
+++```
+++
+++### 3. 监听滚动更新位置
+++
+++```swift
+++func scrollViewDidScroll(_ scrollView: UIScrollView) {
+++    updateCoachMarkPosition()
+++}
+++
+++private func updateCoachMarkPosition() {
+++    guard let hostVC = coachMarkHostingController else { return }
+++    guard let targetPosition = calculateTargetPosition() else { return }
+++    
+++    let updatedCoachMark = CoachMarkView(
+++        title: "标题",
+++        content: "提示内容",
+++        targetPosition: targetPosition,
+++        containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
+++        onDismiss: { [weak self] in
+++            self?.hideCoachMark()
+++        }
+++    )
+++    
+++    hostVC.rootView = updatedCoachMark
+++}
+++```
+++
+++### 4. 隐藏 CoachMarkView
+++
+++```swift
+++private func hideCoachMark() {
+++    coachMarkHostingController?.view.removeFromSuperview()
+++    coachMarkHostingController?.removeFromParent()
+++    coachMarkHostingController = nil
+++}
+++```
+++
+++## 注意事项
+++
+++1. **布局时机**：建议在 `viewDidLayoutSubviews` 中延迟执行 `showCoachMark()`，确保 collectionView 已完成布局
+++
+++```swift
+++override func viewDidLayoutSubviews() {
+++    super.viewDidLayoutSubviews()
+++    
+++    if !coachMarkAdded && headerContainer.bounds.width > 0 && collectionView.bounds.width > 0 {
+++        coachMarkAdded = true
+++        DispatchQueue.main.async {
+++            self.showCoachMark()
+++        }
+++    }
+++}
+++```
+++
+++2. **坐标转换**：确保使用 `convert(_:to:)` 方法进行坐标系转换，避免手动计算错误
+++
+++3. **交互穿透**：设置 `hostVC.view.isUserInteractionEnabled = false` 允许底层视图响应触摸事件
+++
+++## 文件结构
+++
+++```
+++UIKitSwfit/
+++├── ViewController.swift    # 主视图控制器，集成 CoachMarkView
+++├── CoachMarkView.swift     # CoachMarkView 自定义组件
+++└── README.md               # 文档说明
+++```
+++
+++## 技术要点总结
+++
+++| 技术点 | 说明 |
+++|--------|------|
+++| 坐标系转换 | 使用 `UIView.convert(_:to:)` 进行精确坐标转换 |
+++| 视图定位 | 使用 SwiftUI 的 `.position` modifier 进行绝对定位 |
+++| 交互穿透 | 设置 `isUserInteractionEnabled = false` 允许事件传递 |
+++| 滚动更新 | 监听 `UIScrollViewDelegate` 动态更新位置 |
+++| 布局时机 | 在 `viewDidLayoutSubviews` 中确保视图已完成布局 |
++diff --git a/UIKitSwfit b/UIKitSwfit
++new file mode 160000
++index 0000000..fc50748
++--- /dev/null
+++++ b/UIKitSwfit
++@@ -0,0 +1 @@
+++Subproject commit fc50748eba1b4cdf9d7028b69b909a982e5154b4
++diff --git a/UIKitSwfit.xcodeproj/project.pbxproj b/UIKitSwfit.xcodeproj/project.pbxproj
++new file mode 100644
++index 0000000..3c899c8
++--- /dev/null
+++++ b/UIKitSwfit.xcodeproj/project.pbxproj
++@@ -0,0 +1,596 @@
+++// !$*UTF8*$!
+++{
+++	archiveVersion = 1;
+++	classes = {
+++	};
+++	objectVersion = 77;
+++	objects = {
+++
+++/* Begin PBXContainerItemProxy section */
+++		B9CABFE72FCFDC6000924156 /* PBXContainerItemProxy */ = {
+++			isa = PBXContainerItemProxy;
+++			containerPortal = B9CABFC82FCFDC5E00924156 /* Project object */;
+++			proxyType = 1;
+++			remoteGlobalIDString = B9CABFCF2FCFDC5E00924156;
+++			remoteInfo = UIKitSwfit;
+++		};
+++		B9CABFF12FCFDC6000924156 /* PBXContainerItemProxy */ = {
+++			isa = PBXContainerItemProxy;
+++			containerPortal = B9CABFC82FCFDC5E00924156 /* Project object */;
+++			proxyType = 1;
+++			remoteGlobalIDString = B9CABFCF2FCFDC5E00924156;
+++			remoteInfo = UIKitSwfit;
+++		};
+++/* End PBXContainerItemProxy section */
+++
+++/* Begin PBXFileReference section */
+++		B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UIKitSwfit.app; sourceTree = BUILT_PRODUCTS_DIR; };
+++		B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UIKitSwfitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+++		B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UIKitSwfitUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+++/* End PBXFileReference section */
+++
+++/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+++		B9CABFF82FCFDC6000924156 /* Exceptions for "UIKitSwfit" folder in "UIKitSwfit" target */ = {
+++			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+++			membershipExceptions = (
+++				Info.plist,
+++			);
+++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
+++		};
+++/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+++
+++/* Begin PBXFileSystemSynchronizedRootGroup section */
+++		B9CABFD22FCFDC5E00924156 /* UIKitSwfit */ = {
+++			isa = PBXFileSystemSynchronizedRootGroup;
+++			exceptions = (
+++				B9CABFF82FCFDC6000924156 /* Exceptions for "UIKitSwfit" folder in "UIKitSwfit" target */,
+++			);
+++			path = UIKitSwfit;
+++			sourceTree = "<group>";
+++		};
+++		B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */ = {
+++			isa = PBXFileSystemSynchronizedRootGroup;
+++			path = UIKitSwfitTests;
+++			sourceTree = "<group>";
+++		};
+++		B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */ = {
+++			isa = PBXFileSystemSynchronizedRootGroup;
+++			path = UIKitSwfitUITests;
+++			sourceTree = "<group>";
+++		};
+++/* End PBXFileSystemSynchronizedRootGroup section */
+++
+++/* Begin PBXFrameworksBuildPhase section */
+++		B9CABFCD2FCFDC5E00924156 /* Frameworks */ = {
+++			isa = PBXFrameworksBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFE32FCFDC6000924156 /* Frameworks */ = {
+++			isa = PBXFrameworksBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFED2FCFDC6000924156 /* Frameworks */ = {
+++			isa = PBXFrameworksBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++/* End PBXFrameworksBuildPhase section */
+++
+++/* Begin PBXGroup section */
+++		B9CABFC72FCFDC5E00924156 = {
+++			isa = PBXGroup;
+++			children = (
+++				B9CABFD22FCFDC5E00924156 /* UIKitSwfit */,
+++				B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */,
+++				B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */,
+++				B9CABFD12FCFDC5E00924156 /* Products */,
+++			);
+++			sourceTree = "<group>";
+++		};
+++		B9CABFD12FCFDC5E00924156 /* Products */ = {
+++			isa = PBXGroup;
+++			children = (
+++				B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */,
+++				B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */,
+++				B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */,
+++			);
+++			name = Products;
+++			sourceTree = "<group>";
+++		};
+++/* End PBXGroup section */
+++
+++/* Begin PBXNativeTarget section */
+++		B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */ = {
+++			isa = PBXNativeTarget;
+++			buildConfigurationList = B9CABFF92FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfit" */;
+++			buildPhases = (
+++				B9CABFCC2FCFDC5E00924156 /* Sources */,
+++				B9CABFCD2FCFDC5E00924156 /* Frameworks */,
+++				B9CABFCE2FCFDC5E00924156 /* Resources */,
+++			);
+++			buildRules = (
+++			);
+++			dependencies = (
+++			);
+++			fileSystemSynchronizedGroups = (
+++				B9CABFD22FCFDC5E00924156 /* UIKitSwfit */,
+++			);
+++			name = UIKitSwfit;
+++			packageProductDependencies = (
+++			);
+++			productName = UIKitSwfit;
+++			productReference = B9CABFD02FCFDC5E00924156 /* UIKitSwfit.app */;
+++			productType = "com.apple.product-type.application";
+++		};
+++		B9CABFE52FCFDC6000924156 /* UIKitSwfitTests */ = {
+++			isa = PBXNativeTarget;
+++			buildConfigurationList = B9CABFFE2FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitTests" */;
+++			buildPhases = (
+++				B9CABFE22FCFDC6000924156 /* Sources */,
+++				B9CABFE32FCFDC6000924156 /* Frameworks */,
+++				B9CABFE42FCFDC6000924156 /* Resources */,
+++			);
+++			buildRules = (
+++			);
+++			dependencies = (
+++				B9CABFE82FCFDC6000924156 /* PBXTargetDependency */,
+++			);
+++			fileSystemSynchronizedGroups = (
+++				B9CABFE92FCFDC6000924156 /* UIKitSwfitTests */,
+++			);
+++			name = UIKitSwfitTests;
+++			packageProductDependencies = (
+++			);
+++			productName = UIKitSwfitTests;
+++			productReference = B9CABFE62FCFDC6000924156 /* UIKitSwfitTests.xctest */;
+++			productType = "com.apple.product-type.bundle.unit-test";
+++		};
+++		B9CABFEF2FCFDC6000924156 /* UIKitSwfitUITests */ = {
+++			isa = PBXNativeTarget;
+++			buildConfigurationList = B9CAC0012FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitUITests" */;
+++			buildPhases = (
+++				B9CABFEC2FCFDC6000924156 /* Sources */,
+++				B9CABFED2FCFDC6000924156 /* Frameworks */,
+++				B9CABFEE2FCFDC6000924156 /* Resources */,
+++			);
+++			buildRules = (
+++			);
+++			dependencies = (
+++				B9CABFF22FCFDC6000924156 /* PBXTargetDependency */,
+++			);
+++			fileSystemSynchronizedGroups = (
+++				B9CABFF32FCFDC6000924156 /* UIKitSwfitUITests */,
+++			);
+++			name = UIKitSwfitUITests;
+++			packageProductDependencies = (
+++			);
+++			productName = UIKitSwfitUITests;
+++			productReference = B9CABFF02FCFDC6000924156 /* UIKitSwfitUITests.xctest */;
+++			productType = "com.apple.product-type.bundle.ui-testing";
+++		};
+++/* End PBXNativeTarget section */
+++
+++/* Begin PBXProject section */
+++		B9CABFC82FCFDC5E00924156 /* Project object */ = {
+++			isa = PBXProject;
+++			attributes = {
+++				BuildIndependentTargetsInParallel = 1;
+++				LastSwiftUpdateCheck = 2650;
+++				LastUpgradeCheck = 2650;
+++				TargetAttributes = {
+++					B9CABFCF2FCFDC5E00924156 = {
+++						CreatedOnToolsVersion = 26.5;
+++					};
+++					B9CABFE52FCFDC6000924156 = {
+++						CreatedOnToolsVersion = 26.5;
+++						TestTargetID = B9CABFCF2FCFDC5E00924156;
+++					};
+++					B9CABFEF2FCFDC6000924156 = {
+++						CreatedOnToolsVersion = 26.5;
+++						TestTargetID = B9CABFCF2FCFDC5E00924156;
+++					};
+++				};
+++			};
+++			buildConfigurationList = B9CABFCB2FCFDC5E00924156 /* Build configuration list for PBXProject "UIKitSwfit" */;
+++			developmentRegion = en;
+++			hasScannedForEncodings = 0;
+++			knownRegions = (
+++				en,
+++				Base,
+++			);
+++			mainGroup = B9CABFC72FCFDC5E00924156;
+++			minimizedProjectReferenceProxies = 1;
+++			preferredProjectObjectVersion = 77;
+++			productRefGroup = B9CABFD12FCFDC5E00924156 /* Products */;
+++			projectDirPath = "";
+++			projectRoot = "";
+++			targets = (
+++				B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */,
+++				B9CABFE52FCFDC6000924156 /* UIKitSwfitTests */,
+++				B9CABFEF2FCFDC6000924156 /* UIKitSwfitUITests */,
+++			);
+++		};
+++/* End PBXProject section */
+++
+++/* Begin PBXResourcesBuildPhase section */
+++		B9CABFCE2FCFDC5E00924156 /* Resources */ = {
+++			isa = PBXResourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFE42FCFDC6000924156 /* Resources */ = {
+++			isa = PBXResourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFEE2FCFDC6000924156 /* Resources */ = {
+++			isa = PBXResourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++/* End PBXResourcesBuildPhase section */
+++
+++/* Begin PBXSourcesBuildPhase section */
+++		B9CABFCC2FCFDC5E00924156 /* Sources */ = {
+++			isa = PBXSourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFE22FCFDC6000924156 /* Sources */ = {
+++			isa = PBXSourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++		B9CABFEC2FCFDC6000924156 /* Sources */ = {
+++			isa = PBXSourcesBuildPhase;
+++			buildActionMask = 2147483647;
+++			files = (
+++			);
+++			runOnlyForDeploymentPostprocessing = 0;
+++		};
+++/* End PBXSourcesBuildPhase section */
+++
+++/* Begin PBXTargetDependency section */
+++		B9CABFE82FCFDC6000924156 /* PBXTargetDependency */ = {
+++			isa = PBXTargetDependency;
+++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
+++			targetProxy = B9CABFE72FCFDC6000924156 /* PBXContainerItemProxy */;
+++		};
+++		B9CABFF22FCFDC6000924156 /* PBXTargetDependency */ = {
+++			isa = PBXTargetDependency;
+++			target = B9CABFCF2FCFDC5E00924156 /* UIKitSwfit */;
+++			targetProxy = B9CABFF12FCFDC6000924156 /* PBXContainerItemProxy */;
+++		};
+++/* End PBXTargetDependency section */
+++
+++/* Begin XCBuildConfiguration section */
+++		B9CABFFA2FCFDC6000924156 /* Debug */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+++				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				INFOPLIST_FILE = UIKitSwfit/Info.plist;
+++				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+++				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+++				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+++				LD_RUNPATH_SEARCH_PATHS = (
+++					"$(inherited)",
+++					"@executable_path/Frameworks",
+++				);
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfit;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+++				SWIFT_EMIT_LOC_STRINGS = YES;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++			};
+++			name = Debug;
+++		};
+++		B9CABFFB2FCFDC6000924156 /* Release */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+++				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				INFOPLIST_FILE = UIKitSwfit/Info.plist;
+++				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+++				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+++				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+++				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+++				LD_RUNPATH_SEARCH_PATHS = (
+++					"$(inherited)",
+++					"@executable_path/Frameworks",
+++				);
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfit;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+++				SWIFT_EMIT_LOC_STRINGS = YES;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++			};
+++			name = Release;
+++		};
+++		B9CABFFC2FCFDC6000924156 /* Debug */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				ALWAYS_SEARCH_USER_PATHS = NO;
+++				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+++				CLANG_ANALYZER_NONNULL = YES;
+++				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+++				CLANG_ENABLE_MODULES = YES;
+++				CLANG_ENABLE_OBJC_ARC = YES;
+++				CLANG_ENABLE_OBJC_WEAK = YES;
+++				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+++				CLANG_WARN_BOOL_CONVERSION = YES;
+++				CLANG_WARN_COMMA = YES;
+++				CLANG_WARN_CONSTANT_CONVERSION = YES;
+++				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+++				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+++				CLANG_WARN_EMPTY_BODY = YES;
+++				CLANG_WARN_ENUM_CONVERSION = YES;
+++				CLANG_WARN_INFINITE_RECURSION = YES;
+++				CLANG_WARN_INT_CONVERSION = YES;
+++				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+++				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+++				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+++				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+++				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+++				CLANG_WARN_STRICT_PROTOTYPES = YES;
+++				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+++				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+++				CLANG_WARN_UNREACHABLE_CODE = YES;
+++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+++				COPY_PHASE_STRIP = NO;
+++				DEBUG_INFORMATION_FORMAT = dwarf;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				ENABLE_STRICT_OBJC_MSGSEND = YES;
+++				ENABLE_TESTABILITY = YES;
+++				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+++				GCC_C_LANGUAGE_STANDARD = gnu17;
+++				GCC_DYNAMIC_NO_PIC = NO;
+++				GCC_NO_COMMON_BLOCKS = YES;
+++				GCC_OPTIMIZATION_LEVEL = 0;
+++				GCC_PREPROCESSOR_DEFINITIONS = (
+++					"DEBUG=1",
+++					"$(inherited)",
+++				);
+++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+++				GCC_WARN_UNDECLARED_SELECTOR = YES;
+++				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+++				GCC_WARN_UNUSED_FUNCTION = YES;
+++				GCC_WARN_UNUSED_VARIABLE = YES;
+++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+++				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+++				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+++				MTL_FAST_MATH = YES;
+++				ONLY_ACTIVE_ARCH = YES;
+++				SDKROOT = iphoneos;
+++				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+++				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+++			};
+++			name = Debug;
+++		};
+++		B9CABFFD2FCFDC6000924156 /* Release */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				ALWAYS_SEARCH_USER_PATHS = NO;
+++				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+++				CLANG_ANALYZER_NONNULL = YES;
+++				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+++				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+++				CLANG_ENABLE_MODULES = YES;
+++				CLANG_ENABLE_OBJC_ARC = YES;
+++				CLANG_ENABLE_OBJC_WEAK = YES;
+++				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+++				CLANG_WARN_BOOL_CONVERSION = YES;
+++				CLANG_WARN_COMMA = YES;
+++				CLANG_WARN_CONSTANT_CONVERSION = YES;
+++				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+++				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+++				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+++				CLANG_WARN_EMPTY_BODY = YES;
+++				CLANG_WARN_ENUM_CONVERSION = YES;
+++				CLANG_WARN_INFINITE_RECURSION = YES;
+++				CLANG_WARN_INT_CONVERSION = YES;
+++				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+++				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+++				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+++				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+++				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+++				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+++				CLANG_WARN_STRICT_PROTOTYPES = YES;
+++				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+++				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+++				CLANG_WARN_UNREACHABLE_CODE = YES;
+++				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+++				COPY_PHASE_STRIP = NO;
+++				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				ENABLE_NS_ASSERTIONS = NO;
+++				ENABLE_STRICT_OBJC_MSGSEND = YES;
+++				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+++				GCC_C_LANGUAGE_STANDARD = gnu17;
+++				GCC_NO_COMMON_BLOCKS = YES;
+++				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+++				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+++				GCC_WARN_UNDECLARED_SELECTOR = YES;
+++				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+++				GCC_WARN_UNUSED_FUNCTION = YES;
+++				GCC_WARN_UNUSED_VARIABLE = YES;
+++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+++				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+++				MTL_ENABLE_DEBUG_INFO = NO;
+++				MTL_FAST_MATH = YES;
+++				SDKROOT = iphoneos;
+++				SWIFT_COMPILATION_MODE = wholemodule;
+++				VALIDATE_PRODUCT = YES;
+++			};
+++			name = Release;
+++		};
+++		B9CABFFF2FCFDC6000924156 /* Debug */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				BUNDLE_LOADER = "$(TEST_HOST)";
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitTests;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_EMIT_LOC_STRINGS = NO;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/UIKitSwfit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/UIKitSwfit";
+++			};
+++			name = Debug;
+++		};
+++		B9CAC0002FCFDC6000924156 /* Release */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				BUNDLE_LOADER = "$(TEST_HOST)";
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitTests;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_EMIT_LOC_STRINGS = NO;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/UIKitSwfit.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/UIKitSwfit";
+++			};
+++			name = Release;
+++		};
+++		B9CAC0022FCFDC6000924156 /* Debug */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitUITests;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_EMIT_LOC_STRINGS = NO;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++				TEST_TARGET_NAME = UIKitSwfit;
+++			};
+++			name = Debug;
+++		};
+++		B9CAC0032FCFDC6000924156 /* Release */ = {
+++			isa = XCBuildConfiguration;
+++			buildSettings = {
+++				CODE_SIGN_STYLE = Automatic;
+++				CURRENT_PROJECT_VERSION = 1;
+++				DEVELOPMENT_TEAM = DR9FKKTF8Y;
+++				GENERATE_INFOPLIST_FILE = YES;
+++				MARKETING_VERSION = 1.0;
+++				PRODUCT_BUNDLE_IDENTIFIER = com.yantao.demo.UIKitSwfitUITests;
+++				PRODUCT_NAME = "$(TARGET_NAME)";
+++				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+++				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+++				SWIFT_EMIT_LOC_STRINGS = NO;
+++				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+++				SWIFT_VERSION = 5.0;
+++				TARGETED_DEVICE_FAMILY = "1,2";
+++				TEST_TARGET_NAME = UIKitSwfit;
+++			};
+++			name = Release;
+++		};
+++/* End XCBuildConfiguration section */
+++
+++/* Begin XCConfigurationList section */
+++		B9CABFCB2FCFDC5E00924156 /* Build configuration list for PBXProject "UIKitSwfit" */ = {
+++			isa = XCConfigurationList;
+++			buildConfigurations = (
+++				B9CABFFC2FCFDC6000924156 /* Debug */,
+++				B9CABFFD2FCFDC6000924156 /* Release */,
+++			);
+++			defaultConfigurationIsVisible = 0;
+++			defaultConfigurationName = Release;
+++		};
+++		B9CABFF92FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfit" */ = {
+++			isa = XCConfigurationList;
+++			buildConfigurations = (
+++				B9CABFFA2FCFDC6000924156 /* Debug */,
+++				B9CABFFB2FCFDC6000924156 /* Release */,
+++			);
+++			defaultConfigurationIsVisible = 0;
+++			defaultConfigurationName = Release;
+++		};
+++		B9CABFFE2FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitTests" */ = {
+++			isa = XCConfigurationList;
+++			buildConfigurations = (
+++				B9CABFFF2FCFDC6000924156 /* Debug */,
+++				B9CAC0002FCFDC6000924156 /* Release */,
+++			);
+++			defaultConfigurationIsVisible = 0;
+++			defaultConfigurationName = Release;
+++		};
+++		B9CAC0012FCFDC6000924156 /* Build configuration list for PBXNativeTarget "UIKitSwfitUITests" */ = {
+++			isa = XCConfigurationList;
+++			buildConfigurations = (
+++				B9CAC0022FCFDC6000924156 /* Debug */,
+++				B9CAC0032FCFDC6000924156 /* Release */,
+++			);
+++			defaultConfigurationIsVisible = 0;
+++			defaultConfigurationName = Release;
+++		};
+++/* End XCConfigurationList section */
+++	};
+++	rootObject = B9CABFC82FCFDC5E00924156 /* Project object */;
+++}
++diff --git a/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata b/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata
++new file mode 100644
++index 0000000..919434a
++--- /dev/null
+++++ b/UIKitSwfit.xcodeproj/project.xcworkspace/contents.xcworkspacedata
++@@ -0,0 +1,7 @@
+++<?xml version="1.0" encoding="UTF-8"?>
+++<Workspace
+++   version = "1.0">
+++   <FileRef
+++      location = "self:">
+++   </FileRef>
+++</Workspace>
++diff --git a/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate b/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate
++new file mode 100644
++index 0000000..1a0835e
++Binary files /dev/null and b/UIKitSwfit.xcodeproj/project.xcworkspace/xcuserdata/yantao.xcuserdatad/UserInterfaceState.xcuserstate differ
++diff --git a/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
++new file mode 100644
++index 0000000..1e00f48
++--- /dev/null
+++++ b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
++@@ -0,0 +1,84 @@
+++<?xml version="1.0" encoding="UTF-8"?>
+++<Bucket
+++   uuid = "827F966D-FA97-49D4-8A21-61E82EC96041"
+++   type = "1"
+++   version = "2.0">
+++   <Breakpoints>
+++      <BreakpointProxy
+++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+++         <BreakpointContent
+++            uuid = "CF25F2E2-EC45-4276-858C-6FFF32A5721C"
+++            shouldBeEnabled = "Yes"
+++            ignoreCount = "0"
+++            continueAfterRunningActions = "No"
+++            filePath = "UIKitSwfit/ViewController.swift"
+++            startingColumnNumber = "9223372036854775807"
+++            endingColumnNumber = "9223372036854775807"
+++            startingLineNumber = "239"
+++            endingLineNumber = "239">
+++         </BreakpointContent>
+++      </BreakpointProxy>
+++      <BreakpointProxy
+++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+++         <BreakpointContent
+++            uuid = "4555BE80-EF75-4ACB-B8E3-5B47F71585EA"
+++            shouldBeEnabled = "Yes"
+++            ignoreCount = "0"
+++            continueAfterRunningActions = "No"
+++            filePath = "UIKitSwfit/ViewController.swift"
+++            startingColumnNumber = "9223372036854775807"
+++            endingColumnNumber = "9223372036854775807"
+++            startingLineNumber = "245"
+++            endingLineNumber = "245">
+++         </BreakpointContent>
+++      </BreakpointProxy>
+++      <BreakpointProxy
+++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+++         <BreakpointContent
+++            uuid = "C0A3E63F-EB91-489D-84C2-144D9A033BDF"
+++            shouldBeEnabled = "Yes"
+++            ignoreCount = "0"
+++            continueAfterRunningActions = "No"
+++            filePath = "UIKitSwfit/ViewController.swift"
+++            startingColumnNumber = "9223372036854775807"
+++            endingColumnNumber = "9223372036854775807"
+++            startingLineNumber = "86"
+++            endingLineNumber = "86"
+++            landmarkName = "calculateTargetPosition()"
+++            landmarkType = "7">
+++         </BreakpointContent>
+++      </BreakpointProxy>
+++      <BreakpointProxy
+++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+++         <BreakpointContent
+++            uuid = "EDB69113-6760-4211-A14E-F9A193A5CEE9"
+++            shouldBeEnabled = "Yes"
+++            ignoreCount = "0"
+++            continueAfterRunningActions = "No"
+++            filePath = "UIKitSwfit/ViewController.swift"
+++            startingColumnNumber = "9223372036854775807"
+++            endingColumnNumber = "9223372036854775807"
+++            startingLineNumber = "191"
+++            endingLineNumber = "191"
+++            landmarkName = "ViewController"
+++            landmarkType = "21">
+++         </BreakpointContent>
+++      </BreakpointProxy>
+++      <BreakpointProxy
+++         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+++         <BreakpointContent
+++            uuid = "D48068D9-B12A-44C8-83A3-2F5BE158E781"
+++            shouldBeEnabled = "Yes"
+++            ignoreCount = "0"
+++            continueAfterRunningActions = "No"
+++            filePath = "UIKitSwfit/ViewController.swift"
+++            startingColumnNumber = "9223372036854775807"
+++            endingColumnNumber = "9223372036854775807"
+++            startingLineNumber = "170"
+++            endingLineNumber = "170"
+++            landmarkName = "updateCoachMarkPosition()"
+++            landmarkType = "7">
+++         </BreakpointContent>
+++      </BreakpointProxy>
+++   </Breakpoints>
+++</Bucket>
++diff --git a/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist
++new file mode 100644
++index 0000000..6bfd6fb
++--- /dev/null
+++++ b/UIKitSwfit.xcodeproj/xcuserdata/yantao.xcuserdatad/xcschemes/xcschememanagement.plist
++@@ -0,0 +1,14 @@
+++<?xml version="1.0" encoding="UTF-8"?>
+++<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+++<plist version="1.0">
+++<dict>
+++	<key>SchemeUserState</key>
+++	<dict>
+++		<key>UIKitSwfit.xcscheme_^#shared#^_</key>
+++		<dict>
+++			<key>orderHint</key>
+++			<integer>0</integer>
+++		</dict>
+++	</dict>
+++</dict>
+++</plist>
++diff --git a/UIKitSwfitTests/UIKitSwfitTests.swift b/UIKitSwfitTests/UIKitSwfitTests.swift
++new file mode 100644
++index 0000000..e8a5067
++--- /dev/null
+++++ b/UIKitSwfitTests/UIKitSwfitTests.swift
++@@ -0,0 +1,38 @@
+++//
+++//  UIKitSwfitTests.swift
+++//  UIKitSwfitTests
+++//
+++//  Created by yantao on 2026/6/3.
+++//
+++
+++import XCTest
+++@testable import UIKitSwfit
+++
+++final class UIKitSwfitTests: XCTestCase {
+++
+++    override func setUpWithError() throws {
+++        // Put setup code here. This method is called before the invocation of each test method in the class.
+++    }
+++
+++    override func tearDownWithError() throws {
+++        // Put teardown code here. This method is called after the invocation of each test method in the class.
+++    }
+++
+++    func testExample() throws {
+++        // This is an example of a functional test case.
+++        // Use XCTAssert and related functions to verify your tests produce the correct results.
+++        // Any test you write for XCTest can be annotated as throws and async.
+++        // Mark your test throws to produce an unexpected failure when your test encounters an uncaught error.
+++        // Mark your test async to allow awaiting for asynchronous code to complete. Check the results with assertions afterwards.
+++        // XCTest Documentation
+++        // https://developer.apple.com/documentation/xctest
+++    }
+++
+++    func testPerformanceExample() throws {
+++        // This is an example of a performance test case.
+++        self.measure {
+++            // Put the code you want to measure the time of here.
+++        }
+++    }
+++
+++}
++diff --git a/UIKitSwfitUITests/UIKitSwfitUITests.swift b/UIKitSwfitUITests/UIKitSwfitUITests.swift
++new file mode 100644
++index 0000000..497a830
++--- /dev/null
+++++ b/UIKitSwfitUITests/UIKitSwfitUITests.swift
++@@ -0,0 +1,43 @@
+++//
+++//  UIKitSwfitUITests.swift
+++//  UIKitSwfitUITests
+++//
+++//  Created by yantao on 2026/6/3.
+++//
+++
+++import XCTest
+++
+++final class UIKitSwfitUITests: XCTestCase {
+++
+++    override func setUpWithError() throws {
+++        // Put setup code here. This method is called before the invocation of each test method in the class.
+++
+++        // In UI tests it is usually best to stop immediately when a failure occurs.
+++        continueAfterFailure = false
+++
+++        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
+++    }
+++
+++    override func tearDownWithError() throws {
+++        // Put teardown code here. This method is called after the invocation of each test method in the class.
+++    }
+++
+++    @MainActor
+++    func testExample() throws {
+++        // UI tests must launch the application that they test.
+++        let app = XCUIApplication()
+++        app.launch()
+++
+++        // Use XCTAssert and related functions to verify your tests produce the correct results.
+++        // XCUIAutomation Documentation
+++        // https://developer.apple.com/documentation/xcuiautomation
+++    }
+++
+++    @MainActor
+++    func testLaunchPerformance() throws {
+++        // This measures how long it takes to launch your application.
+++        measure(metrics: [XCTApplicationLaunchMetric()]) {
+++            XCUIApplication().launch()
+++        }
+++    }
+++}
++diff --git a/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift b/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift
++new file mode 100644
++index 0000000..5bd9ba3
++--- /dev/null
+++++ b/UIKitSwfitUITests/UIKitSwfitUITestsLaunchTests.swift
++@@ -0,0 +1,35 @@
+++//
+++//  UIKitSwfitUITestsLaunchTests.swift
+++//  UIKitSwfitUITests
+++//
+++//  Created by yantao on 2026/6/3.
+++//
+++
+++import XCTest
+++
+++final class UIKitSwfitUITestsLaunchTests: XCTestCase {
+++
+++    override class var runsForEachTargetApplicationUIConfiguration: Bool {
+++        true
+++    }
+++
+++    override func setUpWithError() throws {
+++        continueAfterFailure = false
+++    }
+++
+++    @MainActor
+++    func testLaunch() throws {
+++        let app = XCUIApplication()
+++        app.launch()
+++
+++        // Insert steps here to perform after app launch but before taking a screenshot,
+++        // such as logging into a test account or navigating somewhere in the app
+++        // XCUIAutomation Documentation
+++        // https://developer.apple.com/documentation/xcuiautomation
+++
+++        let attachment = XCTAttachment(screenshot: app.screenshot())
+++        attachment.name = "Launch Screen"
+++        attachment.lifetime = .keepAlways
+++        add(attachment)
+++    }
+++}

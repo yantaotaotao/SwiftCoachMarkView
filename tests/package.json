@@ -1,0 +1,17 @@
+{
+  "name": "liangyuan-jincheng-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "良缘锦程 — 婚车预订平台特征测试",
+  "scripts": {
+    "test:backend": "cd ../backend && npx jest --config ../tests/backend/jest.config.ts",
+    "test:backend:watch": "cd ../backend && npx jest --config ../tests/backend/jest.config.ts --watch",
+    "test:backend:cov": "cd ../backend && npx jest --config ../tests/backend/jest.config.ts --coverage",
+    "test:frontend": "npx vitest --config ../tests/frontend/vitest.config.ts",
+    "test:frontend:watch": "npx vitest --config ../tests/frontend/vitest.config.ts --watch",
+    "test:frontend:cov": "npx vitest --config ../tests/frontend/vitest.config.ts --coverage",
+    "test:e2e": "npx playwright test --config tests/e2e/playwright.config.ts",
+    "test:e2e:headed": "npx playwright test --config tests/e2e/playwright.config.ts --headed",
+    "test:all": "npm run test:backend && npm run test:frontend && npm run test:e2e"
+  }
+}

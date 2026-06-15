@@ -1,210 +1,129 @@
-# CoachMarkView
+# 🚗 良缘锦程 — 婚车预订平台
 
-一个基于 SwiftUI 的自定义提示组件，用于在指定目标视图下方显示带有箭头的提示气泡。
+> 连接新人与婚车服务商的在线预订平台，聚焦陕西汉中本地市场。
 
-## 功能特点
+## 技术栈
 
-- ✅ 根据目标视图位置自动定位提示气泡
-- ✅ 箭头自动指向目标视图中心
-- ✅ 气泡宽度固定为 200pt
-- ✅ 支持点击关闭按钮关闭提示
-- ✅ 支持界面滚动时自动更新位置
-- ✅ 不拦截用户交互，允许底层视图正常响应滚动等操作
+| 图层 | 技术 |
+|------|------|
+| 前端框架 | React 18 + TypeScript |
+| 构建工具 | Vite |
+| UI 组件库 | Ant Design 5.x |
+| UI 样式 | Tailwind CSS |
+| 状态管理 | Zustand + React Query |
+| 路由 | React Router 6 |
+| 后端框架 | NestJS |
+| ORM | Prisma |
+| 数据库 | MySQL 8.0 |
+| 认证 | JWT |
+| 部署 | Docker + Docker Compose |
 
-## 实现原理
+## 快速启动
 
-### 1. 坐标系统转换
-
-CoachMarkView 的核心是精确的坐标计算和转换：
-
-```swift
-// 在 ViewController 中计算目标位置
-private func calculateTargetPosition() -> CGPoint? {
-    collectionView.layoutIfNeeded()
-    
-    let indexPath = IndexPath(item: 0, section: 0)
-    guard let cellFrame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else {
-        return nil
-    }
-    
-    // 使用 UIKit 的 convert 方法将坐标从 collectionView 坐标系转换到 view 坐标系
-    let cellCenterInCollectionView = CGPoint(x: cellFrame.midX, y: cellFrame.maxY)
-    let targetPosition = collectionView.convert(cellCenterInCollectionView, to: view)
-    
-    return targetPosition
-}
-```
-
-**关键点**：
-- 使用 `layoutAttributesForItem` 获取 cell 在 collectionView 内部的 frame
-- 使用 `convert(_:to:)` 方法进行坐标系转换，自动处理所有父视图层级
-- `targetPosition` 表示目标视图底部中心点在主视图坐标系中的位置
-
-### 2. 气泡定位算法
-
-CoachMarkView 使用 `.position` modifier 进行精确定位：
-
-```swift
-.position(
-    x: bubbleCenterX,
-    y: targetPosition.y + (triangleHeight + bubbleContentHeight) / 2
-)
-```
-
-**定位逻辑**：
-- `bubbleCenterX`：气泡中心点的 x 坐标，限制在屏幕范围内
-- `y` 坐标：气泡中心点 = 目标位置 y + 气泡总高度的一半
-
-### 3. 箭头偏移计算
-
-箭头需要根据目标位置动态调整在气泡中的位置：
-
-```swift
-private var arrowCenterX: CGFloat {
-    // 计算箭头相对于气泡左边缘的位置
-    let arrowX = targetPosition.x - (bubbleCenterX - bubbleWidth / 2)
-    // 限制箭头在气泡范围内
-    let minArrowX: CGFloat = triangleWidth / 2
-    let maxArrowX: CGFloat = bubbleWidth - triangleWidth / 2
-    return max(minArrowX, min(arrowX, maxArrowX))
-}
-```
-
-### 4. 视图层级设计
-
-CoachMarkView 作为独立视图层叠在主视图之上：
-
-```swift
-// 将 CoachMarkView 添加到主视图上，覆盖全屏但内容只显示在目标位置附近
-NSLayoutConstraint.activate([
-    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
-    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-])
-```
-
-**关键设置**：
-- `hostVC.view.isUserInteractionEnabled = false`：禁用交互，允许滚动事件穿透到底层 tableView
-
-## 使用方法
-
-### 1. 创建 CoachMarkView
-
-```swift
-let coachMark = CoachMarkView(
-    title: "标题",
-    content: "提示内容",
-    targetPosition: targetPosition,  // 目标位置（主视图坐标系）
-    containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
-    onDismiss: { [weak self] in
-        self?.hideCoachMark()
-    }
-)
-```
-
-### 2. 通过 UIHostingController 添加到视图
-
-```swift
-coachMarkHostingController = UIHostingController(rootView: coachMark)
-guard let hostVC = coachMarkHostingController else { return }
-
-hostVC.view.translatesAutoresizingMaskIntoConstraints = false
-hostVC.view.backgroundColor = .clear
-hostVC.view.isUserInteractionEnabled = false  // 关键：允许交互穿透
-
-addChild(hostVC)
-view.addSubview(hostVC.view)
-
-NSLayoutConstraint.activate([
-    hostVC.view.topAnchor.constraint(equalTo: view.topAnchor),
-    hostVC.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-    hostVC.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-    hostVC.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
-])
-
-hostVC.didMove(toParent: self)
-```
-
-### 3. 监听滚动更新位置
-
-```swift
-func scrollViewDidScroll(_ scrollView: UIScrollView) {
-    updateCoachMarkPosition()
-}
-
-private func updateCoachMarkPosition() {
-    guard let hostVC = coachMarkHostingController else { return }
-    guard let targetPosition = calculateTargetPosition() else { return }
-    
-    let updatedCoachMark = CoachMarkView(
-        title: "标题",
-        content: "提示内容",
-        targetPosition: targetPosition,
-        containerSize: CGSize(width: view.bounds.width, height: view.bounds.height),
-        onDismiss: { [weak self] in
-            self?.hideCoachMark()
-        }
-    )
-    
-    hostVC.rootView = updatedCoachMark
-}
-```
-
-### 4. 隐藏 CoachMarkView
-
-```swift
-private func hideCoachMark() {
-    coachMarkHostingController?.view.removeFromSuperview()
-    coachMarkHostingController?.removeFromParent()
-    coachMarkHostingController = nil
-}
-```
-
-## 注意事项
-
-1. **布局时机**：建议在 `viewDidLayoutSubviews` 中延迟执行 `showCoachMark()`，确保 collectionView 已完成布局
-
-```swift
-override func viewDidLayoutSubviews() {
-    super.viewDidLayoutSubviews()
-    
-    if !coachMarkAdded && headerContainer.bounds.width > 0 && collectionView.bounds.width > 0 {
-        coachMarkAdded = true
-        DispatchQueue.main.async {
-            self.showCoachMark()
-        }
-    }
-}
-```
-
-2. **坐标转换**：确保使用 `convert(_:to:)` 方法进行坐标系转换，避免手动计算错误
-
-3. **交互穿透**：设置 `hostVC.view.isUserInteractionEnabled = false` 允许底层视图响应触摸事件
-
-## 文件结构
-
-```
-UIKitSwfit/
-├── ViewController.swift    # 主视图控制器，集成 CoachMarkView
-├── CoachMarkView.swift     # CoachMarkView 自定义组件
-└── README.md               # 文档说明
-```
-
-## 技术要点总结
-
-| 技术点 | 说明 |
-|--------|------|
-| 坐标系转换 | 使用 `UIView.convert(_:to:)` 进行精确坐标转换 |
-| 视图定位 | 使用 SwiftUI 的 `.position` modifier 进行绝对定位 |
-| 交互穿透 | 设置 `isUserInteractionEnabled = false` 允许事件传递 |
-
-## 备注执行命令
+### 本地开发
 
 ```bash
-git diff eeb3d586066b327ccdc764a7c1f336b1e02050a5 b8db57336d952ed9b80257a893f57ae280af1c98 > ./all_file.diff
-# 只输出文件列表
-git diff --name-only eeb3d586066b327ccdc764a7c1f336b1e02050a5 b8db57336d952ed9b80257a893f57ae280af1c98 > ./all.diff
+# 1. 启动 MySQL（需要 Docker）
+docker run -d --name liangyuan-mysql \
+  -e MYSQL_ROOT_PASSWORD=password \
+  -e MYSQL_DATABASE=liangyuan_jincheng \
+  -p 3306:3306 \
+  mysql:8.0 --default-authentication-plugin=mysql_native_password
+
+# 2. 初始化后端
+cd source/backend
+cp .env.example .env  # 修改数据库连接信息
+npm install
+npx prisma generate
+npx prisma migrate dev --name init
+npm run prisma:seed
+npm run start:dev
+
+# 3. 启动前端
+cd source/frontend
+npm install
+npm run dev
 ```
-| 滚动更新 | 监听 `UIScrollViewDelegate` 动态更新位置 |
-| 布局时机 | 在 `viewDidLayoutSubviews` 中确保视图已完成布局 |
+
+### Docker 部署
+
+```bash
+docker-compose up -d
+```
+
+访问地址：
+- 用户前台：http://localhost
+- 商家后台：http://localhost/merchant/dashboard
+- 管理后台：http://localhost/admin/dashboard
+- API 文档：http://localhost:3000/api-docs
+
+## 默认账号
+
+| 角色 | 账号 | 密码 |
+|------|------|------|
+| 普通用户 | 13800000001 | 123456 |
+| 商家 | 1390000001 | （关联用户：13800000001） |
+| 管理员 | admin | admin123 |
+
+## 项目结构
+
+```
+├── source/
+│   ├── backend/          # NestJS 后端
+│   │   ├── prisma/       # 数据库 Schema + 种子数据
+│   │   └── src/
+│   │       ├── common/   # 公共模块（Prisma、JWT、守卫）
+│   │       └── modules/  # 业务模块
+│   │           ├── auth/       # 认证
+│   │           ├── users/      # 用户
+│   │           ├── merchants/  # 商家
+│   │           ├── cars/       # 车辆
+│   │           ├── orders/     # 订单
+│   │           ├── payments/   # 支付
+│   │           ├── reviews/    # 评价
+│   │           ├── coupons/    # 优惠券
+│   │           ├── upload/     # 文件上传
+│   │           └── admin/      # 管理后台
+│   └── frontend/         # React 前端
+│       └── src/
+│           ├── components/    # 通用组件
+│           ├── pages/         # 页面
+│           │   ├── home/      # 首页
+│           │   ├── cars/      # 车辆列表/详情
+│           │   ├── order/     # 下单/支付
+│           │   ├── user/      # 用户中心
+│           │   ├── merchant/  # 商家后台
+│           │   └── admin/     # 管理后台
+│           └── services/      # API 服务层
+├── docker-compose.yml
+└── LIANGYUAN_SPEC.md     # 产品需求文档
+```
+
+## 功能概览
+
+### 用户前台
+- 首页（Banner、分类导航、热门推荐）
+- 车辆列表（筛选、排序、搜索）
+- 车辆详情（图片、参数、套餐、日历、评价）
+- 在线下单（日期、套餐、跟车配置、费用明细）
+- 订单支付
+- 用户中心（订单、收藏、个人信息、浏览记录）
+
+### 商家后台
+- 工作台（数据概览、待办事项）
+- 车辆管理（CRUD、上下架、档期管理）
+- 订单管理（接单、拒单、完成服务）
+- 财务管理（收入统计、提现申请）
+- 店铺管理（信息编辑、资质认证）
+- 评价管理（查看、回复）
+
+### 管理后台
+- 运营看板（数据统计）
+- 用户管理（列表、封禁/解禁）
+- 商家管理（审核、冻结、佣金设置）
+- 车辆审核
+- 订单管理（全平台订单、纠纷处理）
+- 财务管理（佣金统计、提现审核）
+- Banner管理
+- 管理员管理
+- 优惠券管理

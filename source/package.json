@@ -1,0 +1,15 @@
+{
+  "name": "liangyuan-jincheng",
+  "version": "2.0.0",
+  "private": true,
+  "description": "良缘锦程 — 婚车预订平台",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run start:dev",
+    "build:frontend": "cd frontend && npm run build",
+    "build:backend": "cd backend && npm run build",
+    "test:frontend": "npx vitest --config ../tests/frontend/vitest.config.ts --run",
+    "test:backend": "cd backend && npx jest --config ../tests/backend/jest.config.ts",
+    "test:all": "npm run test:frontend && npm run test:backend"
+  }
+}

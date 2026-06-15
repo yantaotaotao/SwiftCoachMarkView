@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚗 西安 → 汉中 · 青春自驾之旅</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0a12;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* ========== 粒子背景 ========== */
+        #particles-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* ========== Hero Section ========== */
+        .hero {
+            position: relative;
+            z-index: 1;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            background: linear-gradient(135deg, rgba(10,10,18,0.9) 0%, rgba(30,20,60,0.7) 50%, rgba(10,10,18,0.9) 100%);
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1.5rem;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.6);
+            letter-spacing: 0.1em;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        .hero-badge .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse-dot 2s infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 8vw, 6rem);
+            font-weight: 900;
+            background: linear-gradient(135deg, #fff 0%, #a78bfa 40%, #60a5fa 70%, #34d399 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.15;
+            margin-bottom: 1rem;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        .hero h1 .emoji-icon {
+            -webkit-text-fill-color: initial;
+        }
+
+        .hero-sub {
+            font-size: clamp(1rem, 2vw, 1.4rem);
+            color: rgba(255,255,255,0.5);
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            margin-bottom: 2.5rem;
+            animation: fadeInUp 0.8s ease-out 0.4s both;
+        }
+
+        .hero-stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2rem 4rem;
+            justify-content: center;
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat .num {
+            font-size: 2.5rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #a78bfa, #60a5fa);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-stat .label {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.4);
+            margin-top: 0.2rem;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255,255,255,0.3);
+            font-size: 0.75rem;
+            letter-spacing: 0.1em;
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator .mouse {
+            width: 24px;
+            height: 38px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 12px;
+            position: relative;
+        }
+
+        .scroll-indicator .mouse::after {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 10px;
+            background: rgba(255,255,255,0.4);
+            border-radius: 2px;
+            animation: scroll-dot 2s infinite;
+        }
+
+        @keyframes scroll-dot {
+            0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+            100% { opacity: 0; transform: translateX(-50%) translateY(16px); }
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateX(-50%) translateY(0); }
+            50% { transform: translateX(-50%) translateY(8px); }
+        }
+
+        /* ========== Route Section ========== */
+        .route-section {
+            position: relative;
+            z-index: 1;
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-title h2 {
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            font-weight: 900;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-title h2 .highlight {
+            background: linear-gradient(135deg, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-title p {
+            color: rgba(255,255,255,0.4);
+            font-size: 1rem;
+        }
+
+        /* ========== Timeline ========== */
+        .timeline {
+            position: relative;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #a78bfa, #60a5fa, #34d399);
+            opacity: 0.3;
+        }
+
+        .timeline-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+
+        .timeline-item:nth-child(odd) {
+            flex-direction: row;
+        }
+
+        .timeline-item:nth-child(even) {
+            flex-direction: row-reverse;
+        }
+
+        .timeline-content {
+            width: calc(50% - 3rem);
+            padding: 1.5rem 2rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+        }
+
+        .timeline-content:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: rgba(167, 139, 250, 0.3);
+            box-shadow: 0 20px 60px rgba(167, 139, 250, 0.1), 0 0 40px rgba(96, 165, 250, 0.05);
+        }
+
+        .timeline-content .step-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 44px;
+            height: 44px;
+            border-radius: 14px;
+            font-size: 1.4rem;
+            margin-bottom: 0.8rem;
+        }
+
+        .timeline-content .step-icon.purple {
+            background: rgba(167, 139, 250, 0.15);
+        }
+
+        .timeline-content .step-icon.blue {
+            background: rgba(96, 165, 250, 0.15);
+        }
+
+        .timeline-content .step-icon.green {
+            background: rgba(52, 211, 153, 0.15);
+        }
+
+        .timeline-content .step-icon.pink {
+            background: rgba(244, 114, 182, 0.15);
+        }
+
+        .timeline-content .step-name {
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.3);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 0.3rem;
+        }
+
+        .timeline-content h3 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .timeline-content p {
+            color: rgba(255,255,255,0.55);
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .timeline-content .tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.8rem;
+        }
+
+        .timeline-content .tags span {
+            padding: 0.2rem 0.8rem;
+            border-radius: 100px;
+            font-size: 0.75rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: rgba(255,255,255,0.5);
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #a78bfa;
+            border: 3px solid #0a0a12;
+            box-shadow: 0 0 0 4px rgba(167, 139, 250, 0.2), 0 0 20px rgba(167, 139, 250, 0.3);
+            z-index: 2;
+            top: 2rem;
+        }
+
+        .timeline-item:nth-child(2) .timeline-dot { background: #60a5fa; box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.2), 0 0 20px rgba(96, 165, 250, 0.3); }
+        .timeline-item:nth-child(3) .timeline-dot { background: #34d399; box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.2), 0 0 20px rgba(52, 211, 153, 0.3); }
+        .timeline-item:nth-child(4) .timeline-dot { background: #f472b6; box-shadow: 0 0 0 4px rgba(244, 114, 182, 0.2), 0 0 20px rgba(244, 114, 182, 0.3); }
+
+        /* ========== Info Cards Grid ========== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 3rem;
+        }
+
+        .info-card {
+            padding: 2rem;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            backdrop-filter: blur(10px);
+            transition: all 0.4s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 50% 0%, rgba(167, 139, 250, 0.03), transparent 50%);
+            pointer-events: none;
+        }
+
+        .info-card:hover {
+            border-color: rgba(167, 139, 250, 0.2);
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .info-card .card-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .info-card h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .info-card p {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.85rem;
+            line-height: 1.6;
+        }
+
+        /* ========== 路线地图可视化 ========== */
+        .route-visual {
+            margin: 4rem 0;
+            padding: 3rem 2rem;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .route-visual::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at 50% 0%, rgba(167,139,250,0.05), transparent 60%);
+            pointer-events: none;
+        }
+
+        .route-path {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .route-node {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 0.8rem 0;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .route-node .node-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 2;
+        }
+
+        .route-node .node-marker.start {
+            background: linear-gradient(135deg, #a78bfa, #7c3aed);
+            box-shadow: 0 0 20px rgba(167, 139, 250, 0.4);
+        }
+
+        .route-node .node-marker.mid {
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            box-shadow: 0 0 20px rgba(96, 165, 250, 0.4);
+        }
+
+        .route-node .node-marker.end {
+            background: linear-gradient(135deg, #34d399, #10b981);
+            box-shadow: 0 0 20px rgba(52, 211, 153, 0.4);
+        }
+
+        .route-node .node-label {
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+
+        .route-node .node-label small {
+            display: block;
+            color: rgba(255,255,255,0.35);
+            font-size: 0.75rem;
+            font-weight: 300;
+        }
+
+        .route-connector {
+            width: 2px;
+            height: 40px;
+            background: linear-gradient(to bottom, rgba(167,139,250,0.4), rgba(96,165,250,0.4));
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .route-connector::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: rgba(167, 139, 250, 0.6);
+            border-radius: 50%;
+            animation: flow-dot 2s infinite;
+        }
+
+        @keyframes flow-dot {
+            0% { top: 0; opacity: 1; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        .route-connector.green {
+            background: linear-gradient(to bottom, rgba(96,165,250,0.4), rgba(52,211,153,0.4));
+        }
+
+        .route-connector.green::after { background: rgba(52, 211, 153, 0.6); }
+
+        /* ========== Tips Section ========== */
+        .tips-section {
+            position: relative;
+            z-index: 1;
+            padding: 4rem 2rem 6rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .tips-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .tip-card {
+            padding: 1.5rem 2rem;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.06);
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .tip-card:hover {
+            border-color: rgba(255,255,255,0.12);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .tip-card .tip-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .tip-card .tip-text strong {
+            display: block;
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .tip-card .tip-text span {
+            color: rgba(255,255,255,0.45);
+            font-size: 0.8rem;
+        }
+
+        /* ========== Footer ========== */
+        .footer {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            padding: 4rem 2rem;
+            border-top: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .footer p {
+            color: rgba(255,255,255,0.25);
+            font-size: 0.8rem;
+        }
+
+        .footer .hearts {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+            animation: heartBeat 1.5s infinite;
+        }
+
+        @keyframes heartBeat {
+            0%, 100% { transform: scale(1); }
+            25% { transform: scale(1.1); }
+            50% { transform: scale(1); }
+            75% { transform: scale(1.1); }
+        }
+
+        /* ========== Animations ========== */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== Intersection Observer ========== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(40px);
+            transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ========== Responsive ========== */
+        @media (max-width: 768px) {
+            .timeline::before { left: 28px; }
+            .timeline-item,
+            .timeline-item:nth-child(even) {
+                flex-direction: row;
+                padding-left: 3.5rem;
+            }
+            .timeline-content { width: 100%; }
+            .timeline-dot { left: 28px; top: 2rem; }
+            .hero-stat .num { font-size: 1.8rem; }
+            .route-visual { padding: 2rem 1rem; }
+            .info-grid { grid-template-columns: 1fr; }
+            .tips-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====== 粒子背景 Canvas ====== -->
+    <canvas id="particles-canvas"></canvas>
+
+    <!-- ====== Hero ====== -->
+    <section class="hero">
+        <div class="hero-badge">
+            <span class="dot"></span>
+            ROAD TRIP · 2026
+        </div>
+        <h1>🏙️→⛰️<br>西安 → 汉中</h1>
+        <p class="hero-sub">穿越秦岭 · 一场说走就走的青春自驾</p>
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <div class="num">287<small style="font-size:1rem; -webkit-text-fill-color: rgba(255,255,255,0.3);">km</small></div>
+                <div class="label">总里程</div>
+            </div>
+            <div class="hero-stat">
+                <div class="num">~4<small style="font-size:1rem; -webkit-text-fill-color: rgba(255,255,255,0.3);">h</small></div>
+                <div class="label">预计车程</div>
+            </div>
+            <div class="hero-stat">
+                <div class="num">30<small style="font-size:1rem; -webkit-text-fill-color: rgba(255,255,255,0.3);">+</small></div>
+                <div class="label">隧道穿越</div>
+            </div>
+            <div class="hero-stat">
+                <div class="num">2</div>
+                <div class="label">座城市</div>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <div class="mouse"></div>
+            <span>向下滚动</span>
+        </div>
+    </section>
+
+    <!-- ====== Route Timeline ====== -->
+    <section class="route-section">
+        <div class="section-title reveal">
+            <h2>📍 路线 · <span class="highlight">分段详解</span></h2>
+            <p>从长安古都到汉中盆地，一路向南</p>
+        </div>
+
+        <div class="timeline">
+            <!-- Step 1 -->
+            <div class="timeline-item reveal">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <div class="step-icon purple">🏙️</div>
+                    <div class="step-name">第一阶段 · 约 3km</div>
+                    <h3>西安市内出发</h3>
+                    <p>从凤城八路出发，沿未央路向南行驶，经延西高速接入绕城。</p>
+                    <div class="tags">
+                        <span>🚦 市区道路</span>
+                        <span>📍 未央路</span>
+                        <span>⏱ 10min</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="timeline-item reveal">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <div class="step-icon blue">🔄</div>
+                    <div class="step-name">第二阶段 · 约 30km</div>
+                    <h3>西安绕城高速</h3>
+                    <p>吕小寨立交上绕城，经六村堡、咸阳南，从河池寨立交转入京昆高速 G5。</p>
+                    <div class="tags">
+                        <span>🛣️ 绕城高速</span>
+                        <span>📍 河池寨立交</span>
+                        <span>⏱ 25min</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="timeline-item reveal">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <div class="step-icon green">⛰️</div>
+                    <div class="step-name">第三阶段 · 约 240km 🚩 核心路段</div>
+                    <h3>京昆高速 G5 · 穿越秦岭</h3>
+                    <p>驶入京昆高速，穿越秦岭三大隧道群，经宁陕服务区、洋县，至谢家营立交转十天高速。</p>
+                    <div class="tags">
+                        <span>🏔️ 秦岭隧道群</span>
+                        <span>🌲 宁陕服务区</span>
+                        <span>🔀 谢家营立交</span>
+                        <span>⏱ 3h</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="timeline-item reveal">
+                <div class="timeline-dot"></div>
+                <div class="timeline-content">
+                    <div class="step-icon pink">🏁</div>
+                    <div class="step-name">第四阶段 · 约 15km</div>
+                    <h3>到达汉中市区</h3>
+                    <p>铺镇出口下高速，经兴汉路、天汉大道，抵达汉中市中心民主街。</p>
+                    <div class="tags">
+                        <span>🏛️ 汉中博物馆</span>
+                        <span>🍜 热米皮</span>
+                        <span>⏱ 20min</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ====== Route Visual ====== -->
+    <section class="route-section" style="padding-top:0;">
+        <div class="section-title reveal">
+            <h2>🗺️ 路线 · <span class="highlight">一图纵览</span></h2>
+        </div>
+
+        <div class="route-visual reveal">
+            <div class="route-path">
+                <div class="route-node">
+                    <div class="node-marker start">🚩</div>
+                    <div class="node-label">西安 <small>凤城八路 · 出发</small></div>
+                </div>
+                <div class="route-connector"></div>
+                <div class="route-node">
+                    <div class="node-marker mid">🔄</div>
+                    <div class="node-label">吕小寨立交 <small>进入绕城高速</small></div>
+                </div>
+                <div class="route-connector"></div>
+                <div class="route-node">
+                    <div class="node-marker mid">🛣️</div>
+                    <div class="node-label">河池寨立交 <small>转入京昆高速 G5</small></div>
+                </div>
+                <div class="route-connector"></div>
+                <div class="route-node">
+                    <div class="node-marker mid">🏔️</div>
+                    <div class="node-label">秦岭隧道群 <small>连续 30+ 隧道</small></div>
+                </div>
+                <div class="route-connector"></div>
+                <div class="route-node">
+                    <div class="node-marker mid">🌲</div>
+                    <div class="node-label">宁陕服务区 <small>建议休整</small></div>
+                </div>
+                <div class="route-connector"></div>
+                <div class="route-node">
+                    <div class="node-marker mid">🔀</div>
+                    <div class="node-label">谢家营立交 <small>转十天高速 G7011</small></div>
+                </div>
+                <div class="route-connector green"></div>
+                <div class="route-node">
+                    <div class="node-marker end">🏁</div>
+                    <div class="node-label">汉中 <small>民主街 · 抵达</small></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ====== Key Info Cards ====== -->
+    <section class="route-section" style="padding-top:0;">
+        <div class="section-title reveal">
+            <h2>⚠️ 出行 · <span class="highlight">温馨提示</span></h2>
+        </div>
+
+        <div class="info-grid reveal">
+            <div class="info-card">
+                <div class="card-icon">🏔️</div>
+                <h4>秦岭隧道群</h4>
+                <p>连续隧道群约 30+ 公里，限速 80km/h。请开启大灯，保持车距，注意隧道内变道限制。</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon">⛽</div>
+                <h4>加油补给</h4>
+                <p>建议在西安加满油再出发。途中可在宁陕服务区、洋县服务区加油补给。</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon">🌡️</div>
+                <h4>天气提醒</h4>
+                <p>秦岭山区天气多变，夏季多雨、冬季可能积雪。出行前请查询天气预报，雨雾天减速慢行。</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon">📡</div>
+                <h4>手机信号</h4>
+                <p>部分隧道内无手机信号，建议提前下载离线地图。</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon">🍜</div>
+                <h4>汉中必吃</h4>
+                <p>到了汉中，一定要尝尝热米皮、菜豆腐、核桃馍！推荐前进路夜市。</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon">📸</div>
+                <h4>打卡推荐</h4>
+                <p>秦岭服务区观景台（春季油菜花）、汉中博物馆（古汉台）、拜将坛、石门栈道。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ====== Tips ====== -->
+    <section class="tips-section">
+        <div class="section-title reveal">
+            <h2>🎯 年轻人· <span class="highlight">自驾贴士</span></h2>
+        </div>
+
+        <div class="tips-grid reveal">
+            <div class="tip-card">
+                <div class="tip-icon">🎵</div>
+                <div class="tip-text">
+                    <strong>自驾歌单安排上</strong>
+                    <span>穿越秦岭隧道时，来一首《起风了》或《平凡之路》，氛围感拉满！</span>
+                </div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">📱</div>
+                <div class="tip-text">
+                    <strong>找个副驾拍照</strong>
+                    <span>秦岭服务区观景台是绝佳拍照点，记得让副驾帮你记录沿途风景。</span>
+                </div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">💰</div>
+                <div class="tip-text">
+                    <strong>ETC 准备好</strong>
+                    <span>全程高速收费约 120-140 元，建议走 ETC 通道更省时。</span>
+                </div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">🥤</div>
+                <div class="tip-text">
+                    <strong>备好零食饮料</strong>
+                    <span>车上备好水和零食，尤其是口香糖或薄荷糖，过隧道提神用。</span>
+                </div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">🌅</div>
+                <div class="tip-text">
+                    <strong>建议早上出发</strong>
+                    <span>上午 8-9 点出发，中午到汉中吃热米皮，下午还能逛汉中博物馆。</span>
+                </div>
+            </div>
+            <div class="tip-card">
+                <div class="tip-icon">👥</div>
+                <div class="tip-text">
+                    <strong>约上好友拼车</strong>
+                    <span>约上三五好友一起出发，分摊油费过路费，快乐加倍！</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ====== Footer ====== -->
+    <footer class="footer">
+        <p>🚗 西安 → 汉中 · 青春自驾路线规划</p>
+        <p>📍 全程约 287km · 预计 4 小时 · 穿越秦岭 30+ 隧道</p>
+        <div class="hearts">💜 💙 💚</div>
+        <p style="margin-top:1rem;">Made with ❤️ for young adventurers · 2026</p>
+    </footer>
+
+    <script>
+        // ====== 粒子背景 ======
+        const canvas = document.getElementById('particles-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let mouseX = 0, mouseY = 0;
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.3;
+                this.speedY = (Math.random() - 0.5) * 0.3;
+                this.opacity = Math.random() * 0.5 + 0.1;
+                this.color = ['rgba(167,139,250,', 'rgba(96,165,250,', 'rgba(52,211,153,'][Math.floor(Math.random() * 3)];
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+
+                // 鼠标交互
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < 150) {
+                    const force = (150 - dist) / 150 * 0.3;
+                    this.x -= dx / dist * force;
+                    this.y -= dy / dist * force;
+                }
+
+                if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color + this.opacity + ')';
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.floor((canvas.width * canvas.height) / 8000);
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
+        initParticles();
+        window.addEventListener('resize', initParticles);
+
+        function connectParticles() {
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 120) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(167,139,250,${0.04 * (1 - dist / 120)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            connectParticles();
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        // ====== Intersection Observer for Scroll Animations ======
+        const revealElements = document.querySelectorAll('.reveal');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {

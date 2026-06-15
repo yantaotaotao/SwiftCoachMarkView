@@ -1,0 +1,26 @@
+export const jwtConstants = {
+  secret: process.env.JWT_SECRET || 'liangyuan-jincheng-jwt-secret-2026',
+  expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+};
+
+export const ORDER_STATUS = {
+  PENDING_PAY: 'pending_pay',
+  PENDING_CONFIRM: 'pending_confirm',
+  CONFIRMED: 'confirmed',
+  IN_PROGRESS: 'in_progress',
+  COMPLETED: 'completed',
+  CANCELLED: 'cancelled',
+  REFUNDING: 'refunding',
+  REFUNDED: 'refunded',
+};
+
+export const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
+  [ORDER_STATUS.PENDING_PAY]: [ORDER_STATUS.PENDING_CONFIRM, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.PENDING_CONFIRM]: [ORDER_STATUS.CONFIRMED, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.CONFIRMED]: [ORDER_STATUS.IN_PROGRESS, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.IN_PROGRESS]: [ORDER_STATUS.COMPLETED],
+  [ORDER_STATUS.COMPLETED]: [],
+  [ORDER_STATUS.CANCELLED]: [],
+  [ORDER_STATUS.REFUNDING]: [ORDER_STATUS.REFUNDED, ORDER_STATUS.CANCELLED],
+  [ORDER_STATUS.REFUNDED]: [],
+};

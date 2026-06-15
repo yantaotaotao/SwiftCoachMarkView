@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: liangyuan-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_DATABASE: liangyuan_jincheng
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+
+  backend:
+    build: ./source/backend
+    container_name: liangyuan-backend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql
+    environment:
+      DATABASE_URL: "mysql://root:password@mysql:3306/liangyuan_jincheng?schema=public"
+      JWT_SECRET: liangyuan-jincheng-jwt-secret-2026
+      JWT_EXPIRES_IN: 7d
+      PORT: 3000
+    volumes:
+      - ./source/backend/uploads:/app/uploads
+
+  frontend:
+    build: ./source/frontend
+    container_name: liangyuan-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
